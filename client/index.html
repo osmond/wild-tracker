@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Minnesota Wild — Betting Dashboard</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <div class="logo">
+          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 2L3 7v10l9 5 9-5V7L12 2z" fill="#154734" stroke="#ddbd5e" stroke-width="1.5"/>
+            <path d="M12 6l2.5 5H9.5L12 6z" fill="#ddbd5e"/>
+          </svg>
+          <span class="logo-text">Wild Tracker</span>
+        </div>
+        <div class="header-meta">
+          <span class="season-label">Minnesota Wild · 2024–25</span>
+          <button class="btn-refresh" id="btn-refresh" title="Refresh all data">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M1.5 1.5A.5.5 0 0 1 2 1h4a.5.5 0 0 1 0 1H3.5A6.5 6.5 0 1 1 2 8.5a.5.5 0 0 1 1 0 5.5 5.5 0 1 0 1.096-3.3L5.5 6.5A.5.5 0 0 1 5 7H1a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5z"/>
+            </svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <!-- ─── Stats Bar ─────────────────────────────────────────────────── -->
+      <section class="stats-bar" id="stats-bar" aria-label="Summary statistics">
+        <div class="stat-card" id="stat-win-rate">
+          <span class="stat-label">Win Rate</span>
+          <span class="stat-value loading">—</span>
+          <span class="stat-sub" id="stat-win-record">0W – 0L</span>
+        </div>
+        <div class="stat-card" id="stat-clv">
+          <span class="stat-label">Avg CLV</span>
+          <span class="stat-value loading">—</span>
+          <span class="stat-sub">vs Pinnacle close</span>
+        </div>
+        <div class="stat-card" id="stat-roi">
+          <span class="stat-label">ROI</span>
+          <span class="stat-value loading">—</span>
+          <span class="stat-sub">per unit staked</span>
+        </div>
+        <div class="stat-card" id="stat-sharp">
+          <span class="stat-label">Sharp Moves</span>
+          <span class="stat-value loading">—</span>
+          <span class="stat-sub">detected this season</span>
+        </div>
+      </section>
+
+      <!-- ─── Main content grid ─────────────────────────────────────────── -->
+      <div class="content-grid">
+
+        <!-- Games column -->
+        <section class="games-section" aria-label="Games">
+          <div class="section-header">
+            <h2 class="section-title">Games</h2>
+            <span class="games-count" id="games-count"></span>
+          </div>
+
+          <div class="table-wrap">
+            <table class="games-table" id="games-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Opponent</th>
+                  <th>H/A</th>
+                  <th>Opening</th>
+                  <th>Closing</th>
+                  <th>CLV</th>
+                  <th>Result</th>
+                  <th class="th-chevron"></th>
+                </tr>
+              </thead>
+              <tbody id="games-tbody">
+                <tr class="row-loading">
+                  <td colspan="8">Loading games…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Game detail panel (slides in below table) -->
+          <div class="game-detail" id="game-detail" hidden>
+            <div class="detail-header">
+              <span class="detail-title" id="detail-title">Odds Timeline</span>
+              <div class="detail-controls">
+                <div class="book-filters" id="book-filters"></div>
+                <button class="btn-close" id="detail-close" aria-label="Close detail panel">
+                  <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="detail-body">
+              <div class="chart-container">
+                <canvas id="odds-timeline-chart"></canvas>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Sharp moves sidebar -->
+        <aside class="sharp-sidebar" aria-label="Sharp moves feed">
+          <div class="section-header">
+            <h2 class="section-title">Sharp Moves</h2>
+            <span class="sharp-count" id="sharp-count"></span>
+          </div>
+          <div class="sharp-list" id="sharp-moves-list">
+            <div class="feed-loading">Loading…</div>
+          </div>
+        </aside>
+
+      </div><!-- /.content-grid -->
+
+      <!-- ─── Calibration chart ─────────────────────────────────────────── -->
+      <section class="calibration-section" aria-label="Calibration chart">
+        <div class="section-header">
+          <h2 class="section-title">Model Calibration</h2>
+          <span class="section-sub">Predicted probability vs actual outcomes. Perfect calibration follows the dashed diagonal.</span>
+        </div>
+        <div class="calibration-wrap">
+          <canvas id="calibration-chart"></canvas>
+        </div>
+        <p class="calibration-empty" id="calibration-empty" hidden>
+          No predictions logged yet. Use <code>POST /games/:id/predict</code> to record your model's probability estimates.
+        </p>
+      </section>
+
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

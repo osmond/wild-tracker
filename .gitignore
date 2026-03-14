@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+client/node_modules/
+
+# environment — never commit real keys
+.env
+
+# SQLite database
+data/
+
+# Vite build output
+client/dist/
+
+# macOS
+.DS_Store
+
+# editors
+.vscode/
+*.swp
