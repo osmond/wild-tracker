@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Minnesota Wild moneyline odds tracker — schedule, CLV, EV, results",
   "main": "index.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
