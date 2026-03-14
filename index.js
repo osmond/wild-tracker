@@ -242,10 +242,13 @@ router.post('/settle', async (_req, res) => {
 app.use('/api', router);
 
 // Serve the built Vite client in production
-app.use(express.static(path.join(__dirname, 'client', 'dist')));
-app.get('*', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'client', 'dist', 'index.html'));
-});
+const clientDist = path.join(__dirname, 'client', 'dist');
+if (require('fs').existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
 
 app.listen(PORT, () => {
   console.log(`[server] Wild Odds Tracker listening on http://localhost:${PORT}`);
