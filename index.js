@@ -3,6 +3,7 @@
 require('dotenv').config();
 
 const express = require('express');
+const path    = require('path');
 
 const { start: startScheduler }    = require('./src/scheduler');
 const { syncSchedule, pollOdds, settleGames } = require('./src/scheduler');
@@ -35,6 +36,8 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+const router = express.Router();
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 /**
@@ -42,7 +45,7 @@ app.use(express.json());
  * All Wild games (newest first), with merged Pinnacle + DraftKings metric
  * columns (opening/closing lines, CLV, EV) and final scores once settled.
  */
-app.get('/games', (_req, res) => {
+router.get('/games', (_req, res) => {
   const games = getAllGames();
   res.json({ count: games.length, games });
 });
@@ -51,7 +54,7 @@ app.get('/games', (_req, res) => {
  * GET /games/:id
  * Single game detail — game row merged with all odds snapshots.
  */
-app.get('/games/:id', (req, res) => {
+router.get('/games/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) {
     return res.status(400).json({ error: 'id must be a positive integer' });
@@ -67,7 +70,7 @@ app.get('/games/:id', (req, res) => {
  * GET /games/:id/snapshots
  * Full odds-snapshot history for one game (both bookmakers, all types).
  */
-app.get('/games/:id/snapshots', (req, res) => {
+router.get('/games/:id/snapshots', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) {
     return res.status(400).json({ error: 'id must be a positive integer' });
@@ -87,7 +90,7 @@ app.get('/games/:id/snapshots', (req, res) => {
  *
  * Body: { "moneyline": -130 }   (American odds for Wild winning)
  */
-app.post('/games/:id/estimate', (req, res) => {
+router.post('/games/:id/estimate', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) {
     return res.status(400).json({ error: 'id must be a positive integer' });
@@ -120,7 +123,7 @@ app.post('/games/:id/estimate', (req, res) => {
  * GET /sharp-moves
  * All detected sharp move events across every game, newest first.
  */
-app.get('/sharp-moves', (_req, res) => {
+router.get('/sharp-moves', (_req, res) => {
   const moves = getAllSharpMoves();
   res.json({ count: moves.length, sharp_moves: moves });
 });
@@ -130,7 +133,7 @@ app.get('/sharp-moves', (_req, res) => {
  * Aggregate win rate, CLV%, average EV, and simple ROI across all
  * settled Wild games.
  */
-app.get('/stats', (_req, res) => {
+router.get('/stats', (_req, res) => {
   const stats = getStats();
   res.json(stats);
 });
@@ -139,7 +142,7 @@ app.get('/stats', (_req, res) => {
  * GET /games/:id/sharp-moves
  * All sharp-move events recorded for one game.
  */
-app.get('/games/:id/sharp-moves', (req, res) => {
+router.get('/games/:id/sharp-moves', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) {
     return res.status(400).json({ error: 'id must be a positive integer' });
@@ -159,7 +162,7 @@ app.get('/games/:id/sharp-moves', (req, res) => {
  * Upserts into model_predictions.  Recalculating CLV/EV here is intentional
  * so that both estimate formats (moneyline + raw prob) drive the same metrics.
  */
-app.post('/games/:id/predict', (req, res) => {
+router.post('/games/:id/predict', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) {
     return res.status(400).json({ error: 'id must be a positive integer' });
@@ -188,7 +191,7 @@ app.post('/games/:id/predict', (req, res) => {
  * outcome: 1 = Wild win, 0 = Wild loss, null = not yet settled.
  * Useful for generating a calibration curve.
  */
-app.get('/stats/calibration', (_req, res) => {
+router.get('/stats/calibration', (_req, res) => {
   const rows = getCalibrationData();
   res.json({ count: rows.length, calibration: rows });
 });
@@ -199,7 +202,7 @@ app.get('/stats/calibration', (_req, res) => {
  * POST /sync
  * Immediately re-sync the Wild schedule from SportRadar.
  */
-app.post('/sync', async (_req, res) => {
+router.post('/sync', async (_req, res) => {
   try {
     await syncSchedule();
     res.json({ ok: true, message: 'Schedule synced' });
@@ -212,7 +215,7 @@ app.post('/sync', async (_req, res) => {
  * POST /poll-odds
  * Immediately fetch and store the current odds snapshot.
  */
-app.post('/poll-odds', async (_req, res) => {
+router.post('/poll-odds', async (_req, res) => {
   try {
     await pollOdds();
     res.json({ ok: true, message: 'Odds polled' });
@@ -225,7 +228,7 @@ app.post('/poll-odds', async (_req, res) => {
  * POST /settle
  * Immediately attempt to settle all outstanding games.
  */
-app.post('/settle', async (_req, res) => {
+router.post('/settle', async (_req, res) => {
   try {
     await settleGames();
     res.json({ ok: true, message: 'Settle check complete' });
@@ -234,7 +237,15 @@ app.post('/settle', async (_req, res) => {
   }
 });
 
-// ─── Start ────────────────────────────────────────────────────────────────────
+// ─── Mount API router & serve built client ────────────────────────────────────
+
+app.use('/api', router);
+
+// Serve the built Vite client in production
+app.use(express.static(path.join(__dirname, 'client', 'dist')));
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'client', 'dist', 'index.html'));
+});
 
 app.listen(PORT, () => {
   console.log(`[server] Wild Odds Tracker listening on http://localhost:${PORT}`);

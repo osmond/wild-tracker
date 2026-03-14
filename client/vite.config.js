@@ -1,8 +1,7 @@
 import { defineConfig } from 'vite';
 
-export default defineConfig(({ command }) => ({
-  // In production (GitHub Pages) assets live under /wild-tracker/
-  base: command === 'build' ? '/wild-tracker/' : '/',
+export default defineConfig({
+  base: '/',
 
   // Proxy all /api/* calls to the Express backend (strips /api prefix)
   server: {
@@ -19,4 +18,4 @@ export default defineConfig(({ command }) => ({
     outDir: 'dist',
     emptyOutDir: true,
   },
-}));
+});
