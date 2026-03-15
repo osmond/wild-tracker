@@ -2,7 +2,8 @@
 
 const axios = require('axios');
 
-const BASE_URL   = 'https://api.sportradar.us/nhl/trial/v8/en';
+const SR_ACCESS  = process.env.SPORTRADAR_ACCESS_LEVEL ?? 'trial';
+const BASE_URL   = `https://api.sportradar.com/nhl/${SR_ACCESS}/v8/en`;
 const WILD_ALIAS = 'MIN';
 
 /**
