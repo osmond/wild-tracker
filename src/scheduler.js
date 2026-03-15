@@ -11,6 +11,7 @@ const {
   upsertGame,
   getGamesForDate,
   getSettlableGames,
+  getAllGames,
   settleGame,
   updateGameContext,
   insertSnapshot,
@@ -242,7 +243,6 @@ async function settleGames() {
       calculateAndStoreMetrics(game.id, game.my_moneyline);
 
       // Fetch updated metrics from DB for the alert
-      const { getAllGames } = require('./db');
       const allGames = getAllGames();
       const settled  = allGames.find(g => g.id === game.id) ?? {};
       sendSettleAlert({

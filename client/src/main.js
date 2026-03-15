@@ -544,7 +544,26 @@ async function loadAll() {
 
 // ─── Wire up controls ─────────────────────────────────────────────────────────
 
+// ─── Season label ─────────────────────────────────────────────────────────────
+
+/**
+ * NHL season year: the season starting in YEAR runs as "YEAR–YY".
+ * The season starts in October, so months Jan–Sep belong to the prior season.
+ * e.g. March 2026 → season start 2025 → "2025–26"
+ */
+function currentSeasonLabel() {
+  const now   = new Date();
+  const year  = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-indexed
+  const startYear = month >= 10 ? year : year - 1;
+  const endYY = String(startYear + 1).slice(-2);
+  return `Minnesota Wild · ${startYear}–${endYY}`;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  const seasonEl = document.getElementById('season-label');
+  if (seasonEl) seasonEl.textContent = currentSeasonLabel();
+
   document.getElementById('btn-refresh')?.addEventListener('click', loadAll);
   document.getElementById('detail-close')?.addEventListener('click', closeDetailPanel);
   loadAll();

@@ -199,10 +199,26 @@ router.get('/stats/calibration', (_req, res) => {
 // ─── Manual trigger endpoints (useful for testing / backfill) ─────────────────
 
 /**
+ * Simple shared-secret guard for admin-only endpoints.
+ * Set ADMIN_KEY in your .env to enable. Requests must include:
+ *   Authorization: Bearer <ADMIN_KEY>
+ * If ADMIN_KEY is not set, the endpoints are unrestricted (dev convenience).
+ */
+function requireAdminKey(req, res, next) {
+  const adminKey = process.env.ADMIN_KEY;
+  if (!adminKey) return next(); // key not configured — allow in dev
+
+  const auth = req.headers['authorization'] ?? '';
+  if (auth === `Bearer ${adminKey}`) return next();
+
+  return res.status(401).json({ error: 'Unauthorized' });
+}
+
+/**
  * POST /sync
  * Immediately re-sync the Wild schedule from SportRadar.
  */
-router.post('/sync', async (_req, res) => {
+router.post('/sync', requireAdminKey, async (_req, res) => {
   try {
     await syncSchedule();
     res.json({ ok: true, message: 'Schedule synced' });
@@ -215,7 +231,7 @@ router.post('/sync', async (_req, res) => {
  * POST /poll-odds
  * Immediately fetch and store the current odds snapshot.
  */
-router.post('/poll-odds', async (_req, res) => {
+router.post('/poll-odds', requireAdminKey, async (_req, res) => {
   try {
     await pollOdds();
     res.json({ ok: true, message: 'Odds polled' });
@@ -228,7 +244,7 @@ router.post('/poll-odds', async (_req, res) => {
  * POST /settle
  * Immediately attempt to settle all outstanding games.
  */
-router.post('/settle', async (_req, res) => {
+router.post('/settle', requireAdminKey, async (_req, res) => {
   try {
     await settleGames();
     res.json({ ok: true, message: 'Settle check complete' });
