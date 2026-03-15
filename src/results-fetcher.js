@@ -26,7 +26,7 @@ function deriveSeasonYear(date = new Date()) {
  * @returns {Promise<Array>}  Normalised game objects ready for db.upsertGame()
  */
 async function fetchSeasonSchedule(year = deriveSeasonYear(), seasonType = 'REG') {
-  const url = `${BASE_URL}/seasons/${year}/${seasonType}/schedules.json`;
+  const url = `${BASE_URL}/seasons/${year}/${seasonType}/schedule.json`;
 
   const { data } = await axios.get(url, {
     params:  { api_key: process.env.SPORTRADAR_API_KEY },
@@ -90,7 +90,7 @@ async function fetchGameResult(sportradarId) {
  * previous game.  Null on the first game of the season for that team.
  */
 async function fetchDaysRestMap(year = deriveSeasonYear(), seasonType = 'REG') {
-  const url = `${BASE_URL}/seasons/${year}/${seasonType}/schedules.json`;
+  const url = `${BASE_URL}/seasons/${year}/${seasonType}/schedule.json`;
   const { data } = await axios.get(url, {
     params:  { api_key: process.env.SPORTRADAR_API_KEY },
     timeout: 20_000,
@@ -187,7 +187,7 @@ async function fetchContextForWildGames(year = deriveSeasonYear(), seasonType = 
 
   // We need to know the opponent alias per game to look up standings.
   // Re-fetch the schedule briefly (or cache — for now re-use the wild-only data).
-  const url = `${BASE_URL}/seasons/${year}/${seasonType}/schedules.json`;
+  const url = `${BASE_URL}/seasons/${year}/${seasonType}/schedule.json`;
   const { data } = await axios.get(url, {
     params:  { api_key: process.env.SPORTRADAR_API_KEY },
     timeout: 15_000,
