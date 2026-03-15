@@ -164,7 +164,7 @@ function getGamesForDate(dateStr) {
 function getSettlableGames() {
   return db.prepare(`
     SELECT * FROM games
-    WHERE status != 'closed'
+    WHERE result IS NULL
       AND datetime(scheduled_at) < datetime('now', '-2 hours')
     ORDER BY scheduled_at
   `).all();
