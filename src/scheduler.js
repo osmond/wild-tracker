@@ -64,6 +64,7 @@ async function syncSchedule() {
   console.log('[scheduler] Syncing Wild schedule from SportRadar…');
   try {
     const year  = deriveSeasonYear();
+    console.log(`[scheduler] Using season year: ${year}`);
     const games = await fetchSeasonSchedule(year);
 
     for (const g of games) {
@@ -85,7 +86,10 @@ async function syncSchedule() {
       console.error('[scheduler] Context fetch failed (schedule sync still succeeded):', ctxErr.message);
     }
   } catch (err) {
-    console.error('[scheduler] Schedule sync failed:', err.message);
+    const url = err.config?.url ?? 'unknown';
+    const status = err.response?.status ?? 'no response';
+    const body = JSON.stringify(err.response?.data ?? {});
+    console.error(`[scheduler] Schedule sync failed: ${err.message} | url=${url} | status=${status} | body=${body}`);
   }
 }
 
