@@ -22,13 +22,12 @@ const {
 } = require('./src/db');
 
 // ─── Guard: require API keys before starting ─────────────────────────────────
-if (!process.env.SPORTRADAR_API_KEY) {
-  console.error('ERROR: SPORTRADAR_API_KEY is not set. Check your .env file.');
-  process.exit(1);
-}
 if (!process.env.ODDS_API_KEY) {
   console.error('ERROR: ODDS_API_KEY is not set. Check your .env file.');
   process.exit(1);
+}
+if (!process.env.SPORTRADAR_API_KEY) {
+  console.warn('WARN: SPORTRADAR_API_KEY is not set — schedule/results data will use the free NHL API only.');
 }
 
 const app  = express();
