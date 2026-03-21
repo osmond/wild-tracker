@@ -165,4 +165,63 @@ async function fetchHistoricalWildOdds(isoTimestamp) {
   return { lines, remaining, used };
 }
 
-module.exports = { fetchWildOdds, fetchHistoricalWildOdds };
+/**
+ * Fetch historical NHL odds for a Wild game from ESPN's public summary API.
+ * No API key required. ESPN typically retains betting data going back ~16 weeks.
+ *
+ * ESPN uses DraftKings as its primary odds provider.
+ *
+ * @param {string} scheduledAt  ISO-8601 UTC datetime stored in games.scheduled_at
+ * @param {boolean|0|1} isHome  Whether the Wild are the home team
+ * @returns {Promise<{ lines: Array|null }>}
+ */
+async function fetchHistoricalWildOddsFromESPN(scheduledAt, isHome) {
+  const dt = new Date(scheduledAt);
+  // ESPN uses ET/local US dates. Try the UTC date and the day before
+  // (games at midnight UTC are the previous evening in ET).
+  const datesToTry = [dt, new Date(dt.getTime() - 86_400_000)].map(d =>
+    d.toISOString().slice(0, 10).replace(/-/g, ''),
+  );
+
+  let espnEventId = null;
+  for (const date of datesToTry) {
+    const { data: scoreboard } = await axios.get(
+      `https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=${date}`,
+      { timeout: 10_000 },
+    );
+    const ev = (scoreboard.events ?? []).find(e =>
+      e.competitions?.[0]?.competitors?.some(c => c.team?.abbreviation === 'MIN'),
+    );
+    if (ev) { espnEventId = ev.id; break; }
+  }
+
+  if (!espnEventId) return { lines: null };
+
+  const { data: summary } = await axios.get(
+    `https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/summary?event=${espnEventId}`,
+    { timeout: 10_000 },
+  );
+
+  const pc = summary.pickcenter?.[0];
+  if (!pc) return { lines: null };
+
+  const homeSpreadOdds = pc.homeTeamOdds?.spreadOdds ?? null;
+  const awaySpreadOdds = pc.awayTeamOdds?.spreadOdds ?? null;
+
+  const lines = [{
+    bookmaker:        'draftkings',
+    total_line:       pc.overUnder    ?? null,
+    over_odds:        pc.overOdds     ?? null,
+    under_odds:       pc.underOdds    ?? null,
+    wild_spread_odds: isHome ? homeSpreadOdds : awaySpreadOdds,
+    opp_spread_odds:  isHome ? awaySpreadOdds : homeSpreadOdds,
+  }];
+
+  if (lines[0].total_line == null && lines[0].wild_spread_odds == null) {
+    return { lines: null };
+  }
+
+  return { lines };
+}
+
+module.exports = { fetchWildOdds, fetchHistoricalWildOdds, fetchHistoricalWildOddsFromESPN };

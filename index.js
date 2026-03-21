@@ -9,7 +9,7 @@ const { start: startScheduler }    = require('./src/scheduler');
 const { syncSchedule, pollOdds, settleGames } = require('./src/scheduler');
 const { calculateAndStoreMetrics } = require('./src/metrics');
 const { americanToImplied, americanToDecimal } = require('./src/calculator');
-const { fetchHistoricalWildOdds } = require('./src/odds-fetcher');
+const { fetchHistoricalWildOddsFromESPN } = require('./src/odds-fetcher');
 const {
   getAllGames,
   getGameById,
@@ -507,14 +507,15 @@ function requireAdminKey(req, res, next) {
 
 /**
  * POST /admin/backfill-odds
- * Fetch historical totals + spreads odds from The Odds API for every settled
- * game that is missing a closing total line, and upsert them into game_metrics.
- * Also computes total_result for each game once the line is known.
+ * Fetch historical totals + spreads odds from ESPN's public summary API for
+ * every settled game that is missing a closing total line, and upsert them
+ * into game_metrics.  Also computes total_result for each game.
  *
- * Query: ?dryRun=true  — returns the list of games to backfill without API calls.
+ * Uses ESPN's free public API (no key required). ESPN typically retains
+ * betting data going back ~16 weeks, so early-season games may show
+ * "not_found".
  *
- * NOTE: Each game costs 10 Odds API credits. The response includes the
- * remaining credit count so you can monitor usage.
+ * Query: ?dryRun=true  — returns the list of games to backfill without fetching.
  */
 router.post('/admin/backfill-odds', requireAdminKey, async (req, res) => {
   const dryRun   = req.query.dryRun === 'true';
@@ -524,7 +525,6 @@ router.post('/admin/backfill-odds', requireAdminKey, async (req, res) => {
     return res.json({
       dry_run:     true,
       games_count: games.length,
-      credits_est: games.length * 10,
       games:       games.map(g => ({
         id:           g.id,
         scheduled_at: g.scheduled_at,
@@ -537,12 +537,10 @@ router.post('/admin/backfill-odds', requireAdminKey, async (req, res) => {
   const results  = [];
   let filled     = 0;
   let notFound   = 0;
-  let lastRemaining;
 
   for (const game of games) {
     try {
-      const { lines, remaining } = await fetchHistoricalWildOdds(game.scheduled_at);
-      if (remaining !== undefined) lastRemaining = remaining;
+      const { lines } = await fetchHistoricalWildOddsFromESPN(game.scheduled_at, game.is_home);
 
       if (!lines || lines.length === 0) {
         results.push({ game_id: game.id, status: 'not_found' });
@@ -595,12 +593,11 @@ router.post('/admin/backfill-odds', requireAdminKey, async (req, res) => {
   }
 
   return res.json({
-    ok:             true,
-    total:          games.length,
+    ok:        true,
+    source:    'espn',
+    total:     games.length,
     filled,
-    not_found:      notFound,
-    credits_remaining: lastRemaining ?? 'unknown',
-    results,
+    not_found: notFound,
   });
 });
 

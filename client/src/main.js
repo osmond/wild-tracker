@@ -1318,7 +1318,8 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.textContent = 'Fetching…';
     try {
       const result = await postBackfillOdds();
-      alert(`Backfill complete: ${result.filled}/${result.total} games filled. Credits remaining: ${result.credits_remaining}`);
+      const note = result.not_found > 0 ? ` (${result.not_found} games too old — ESPN keeps ~16 weeks of data)` : '';
+      alert(`Backfill complete: ${result.filled}/${result.total} games filled.${note}`);
       loadAll();
     } catch (err) {
       console.error('Backfill failed:', err);
