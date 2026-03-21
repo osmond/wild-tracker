@@ -103,85 +103,75 @@
         </div>
       </section>
 
-      <!-- ─── Main content grid ─────────────────────────────────────────── -->
-      <div class="content-grid">
+      <!-- ─── Games ────────────────────────────────────────────────────── -->
+      <section class="games-section collapsible-section" id="sec-games" aria-label="Games">
+        <div class="section-header">
+          <h2 class="section-title">Games</h2>
+          <span class="games-count" id="games-count"></span>
+          <select class="filter-select" id="opp-strength-filter" title="Filter by opponent strength">
+            <option value="all">All opponents</option>
+            <option value="winning">vs .500+ teams</option>
+            <option value="losing">vs &lt;.500 teams</option>
+            <option value="b2b">Back-to-back games</option>
+          </select>
+          <button class="section-collapse-btn" aria-label="Toggle section">
+            <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 6 8 10 12 6"/></svg>
+          </button>
+        </div>
 
-        <!-- Games column -->
-        <section class="games-section" aria-label="Games">
-          <div class="section-header">
-            <h2 class="section-title">Games</h2>
-            <span class="games-count" id="games-count"></span>
-            <select class="filter-select" id="opp-strength-filter" title="Filter by opponent strength">
-              <option value="all">All opponents</option>
-              <option value="winning">vs .500+ teams</option>
-              <option value="losing">vs &lt;.500 teams</option>
-              <option value="b2b">Back-to-back games</option>
-            </select>
-          </div>
+        <div class="table-wrap">
+          <table class="games-table" id="games-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Opponent</th>
+                <th>H/A</th>
+                <th>Opening</th>
+                <th>Closing</th>
+                <th>CLV</th>
+                <th>Result</th>
+                <th class="th-chevron"></th>
+              </tr>
+            </thead>
+            <tbody id="games-tbody">
+              <tr class="row-loading">
+                <td colspan="8">Loading games…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-          <div class="table-wrap">
-            <table class="games-table" id="games-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Opponent</th>
-                  <th>H/A</th>
-                  <th>Opening</th>
-                  <th>Closing</th>
-                  <th>CLV</th>
-                  <th>Result</th>
-                  <th class="th-chevron"></th>
-                </tr>
-              </thead>
-              <tbody id="games-tbody">
-                <tr class="row-loading">
-                  <td colspan="8">Loading games…</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Game detail panel (slides in below table) -->
-          <div class="game-detail" id="game-detail" hidden>
-            <div class="detail-header">
-              <span class="detail-title" id="detail-title">Odds Timeline</span>
-              <div class="detail-controls">
-                <div class="book-filters" id="book-filters"></div>
-                <button class="btn-close" id="detail-close" aria-label="Close detail panel">
-                  <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div class="detail-body">
-              <div class="game-context-strip" id="game-context-strip" hidden></div>
-              <div class="chart-container">
-                <canvas id="odds-timeline-chart"></canvas>
-              </div>
+        <!-- Game detail panel (slides in below table) -->
+        <div class="game-detail" id="game-detail" hidden>
+          <div class="detail-header">
+            <span class="detail-title" id="detail-title">Odds Timeline</span>
+            <div class="detail-controls">
+              <div class="book-filters" id="book-filters"></div>
+              <button class="btn-close" id="detail-close" aria-label="Close detail panel">
+                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                </svg>
+              </button>
             </div>
           </div>
-        </section>
-
-        <!-- Sharp moves sidebar -->
-        <aside class="sharp-sidebar" aria-label="Sharp moves feed">
-          <div class="section-header">
-            <h2 class="section-title">Sharp Moves</h2>
-            <span class="sharp-count" id="sharp-count"></span>
+          <div class="detail-body">
+            <div class="game-context-strip" id="game-context-strip" hidden></div>
+            <div class="chart-container">
+              <canvas id="odds-timeline-chart"></canvas>
+            </div>
           </div>
-          <div class="sharp-list" id="sharp-moves-list">
-            <div class="feed-loading">Loading…</div>
-          </div>
-        </aside>
-
-      </div><!-- /.content-grid -->
+        </div>
+      </section>
 
       <!-- ─── Dollar Tracker ────────────────────────────────────────────── -->
-      <section class="dollar-section" aria-label="Dollar bet tracker">
+      <section class="dollar-section collapsible-section" id="sec-dollar" aria-label="Dollar bet tracker">
         <div class="section-header">
           <h2 class="section-title">$1 Bet Tracker</h2>
           <span class="section-sub">Every game assumes a $1 bet on the Wild at the market closing line. No input needed — just curiosity.</span>
           <span class="games-count" id="dollar-game-count"></span>
+          <button class="section-collapse-btn" aria-label="Toggle section">
+            <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 6 8 10 12 6"/></svg>
+          </button>
         </div>
 
         <!-- Running P&L chart -->
@@ -217,11 +207,14 @@
       </section>
 
       <!-- ─── Puck Line Coverage ──────────────────────────────────────── -->
-      <section class="puckline-section" aria-label="Puck line coverage tracker">
+      <section class="puckline-section collapsible-section" id="sec-puckline" aria-label="Puck line coverage tracker">
         <div class="section-header">
           <h2 class="section-title">Puck Line Coverage</h2>
           <span class="section-sub">Did the Wild cover ±1.5 goals? Derived from final scores — no odds needed.</span>
           <span class="games-count" id="puckline-game-count"></span>
+          <button class="section-collapse-btn" aria-label="Toggle section">
+            <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 6 8 10 12 6"/></svg>
+          </button>
         </div>
 
         <div class="puckline-summary" id="puckline-summary"></div>
@@ -253,10 +246,13 @@
       </section>
 
       <!-- ─── Total Goals Scatter ───────────────────────────────────────── -->
-      <section class="scatter-section" aria-label="Total goals per game">
+      <section class="scatter-section collapsible-section" id="sec-goals" aria-label="Total goals per game">
         <div class="section-header">
           <h2 class="section-title">Total Goals Per Game</h2>
           <span class="section-sub">Combined final score for every settled Wild game this season. Taller bars = higher-scoring games.</span>
+          <button class="section-collapse-btn" aria-label="Toggle section">
+            <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 6 8 10 12 6"/></svg>
+          </button>
         </div>
         <div class="scatter-chart-wrap">
           <canvas id="total-goals-chart"></canvas>
@@ -264,10 +260,13 @@
       </section>
 
       <!-- ─── O/U Tracker ───────────────────────────────────────────────── -->
-      <section class="ou-section" aria-label="Over/Under bet tracker">
+      <section class="ou-section collapsible-section" id="sec-ou" aria-label="Over/Under bet tracker">
         <div class="section-header">
           <h2 class="section-title">Over / Under Tracker</h2>
           <span class="games-count" id="ou-game-count"></span>
+          <button class="section-collapse-btn" aria-label="Toggle section">
+            <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 6 8 10 12 6"/></svg>
+          </button>
         </div>
 
         <div id="ou-summary" class="ou-summary"></div>

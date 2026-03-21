@@ -1101,11 +1101,8 @@ async function loadAll() {
   // Build the sharp game id set before rendering the table
   if (sharpRes.status === 'fulfilled') {
     sharpGameIds = new Set((sharpRes.value.sharp_moves ?? []).map(m => m.game_id));
-    renderSharpFeed(sharpRes.value.sharp_moves ?? []);
   } else {
     console.warn('Sharp moves fetch failed:', sharpRes.reason);
-    document.getElementById('sharp-moves-list').innerHTML =
-      '<div class="feed-empty">Could not load sharp moves.</div>';
   }
 
   if (gamesRes.status === 'fulfilled') {
@@ -1166,6 +1163,23 @@ async function loadAll() {
   }
 
   if (btn) btn.classList.remove('spinning');
+}
+
+// ─── Collapsible sections ─────────────────────────────────────────────────────
+
+function initCollapsibleSections() {
+  document.querySelectorAll('.collapsible-section').forEach(section => {
+    const id  = section.id;
+    const btn = section.querySelector('.section-collapse-btn');
+    if (!btn || !id) return;
+    if (localStorage.getItem(`${id}-collapsed`) === 'true') {
+      section.classList.add('collapsed');
+    }
+    btn.addEventListener('click', () => {
+      const collapsed = section.classList.toggle('collapsed');
+      localStorage.setItem(`${id}-collapsed`, collapsed);
+    });
+  });
 }
 
 // ─── Wire up controls ─────────────────────────────────────────────────────────
@@ -1289,5 +1303,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  initCollapsibleSections();
   loadAll();
 });

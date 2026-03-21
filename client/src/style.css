@@ -286,7 +286,40 @@ canvas { display: block; }
   font-size: 0.75rem;
   color: var(--text-muted);
 }
+/* ─── Collapsible sections ────────────────────────────────────────────────── */
+.collapsible-section.collapsed > *:not(.section-header) {
+  display: none;
+}
 
+.section-collapse-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.2rem 0.3rem;
+  color: var(--text-muted);
+  line-height: 0;
+  border-radius: var(--radius-sm, 4px);
+  transition: background 0.15s;
+  align-self: center;
+}
+
+.section-collapse-btn:hover {
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+}
+
+.section-collapse-btn .chevron {
+  width: 14px;
+  height: 14px;
+  display: block;
+  transition: transform 0.2s;
+}
+
+.collapsible-section.collapsed .section-collapse-btn .chevron {
+  transform: rotate(-90deg);
+}
 .games-count,
 .sharp-count {
   font-size: 0.72rem;
@@ -888,8 +921,6 @@ tr:hover .edit-line-btn { opacity: 1; }
 
 @media (max-width: 900px) {
   .stats-bar { grid-template-columns: repeat(2, 1fr); }
-  .content-grid { grid-template-columns: 1fr; }
-  .sharp-sidebar { position: static; max-height: 360px; }
   .dollar-chart-wrap { height: 160px; }
 }
 
