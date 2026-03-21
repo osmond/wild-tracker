@@ -826,17 +826,33 @@ canvas { display: block; }
 }
 
 .enter-line-btn {
-  font-size: 0.72rem;
   background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.1s;
+  vertical-align: middle;
+}
+
+/* Pencil icon shown when a line already exists */
+.edit-line-btn {
+  font-size: 0.8rem;
+  color: var(--text-muted, #484f58);
+  padding: 0 0.2rem;
+  margin-left: 0.25rem;
+  opacity: 0;
+}
+tr:hover .edit-line-btn { opacity: 1; }
+.edit-line-btn:hover { color: var(--text-secondary); }
+
+/* '+ line' shown when no line exists */
+.add-line-btn {
+  font-size: 0.72rem;
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text-secondary);
   padding: 0.15rem 0.5rem;
-  cursor: pointer;
-  transition: background 0.1s, color 0.1s;
 }
-
-.enter-line-btn:hover {
+.add-line-btn:hover {
   background: var(--surface-alt);
   color: var(--text-primary);
 }

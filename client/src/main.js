@@ -1082,8 +1082,8 @@ function renderOUTracker(data) {
 
       const totalDisplay = b.total_goals != null ? b.total_goals : '—';
       const lineDisplay  = b.total_line  != null
-        ? `${b.total_line} <button class="enter-line-btn" data-game-id="${b.game_id}" data-total-line="${b.total_line}">edit</button>`
-        : `<button class="enter-line-btn" data-game-id="${b.game_id}">+ line</button>`;
+        ? `<span class="line-value">${b.total_line}</span><button class="enter-line-btn edit-line-btn" data-game-id="${b.game_id}" data-total-line="${b.total_line}" title="Edit line">✎</button>`
+        : `<button class="enter-line-btn add-line-btn" data-game-id="${b.game_id}" title="Enter the total line for this game">+ line</button>`;
 
       return `<tr>
         <td class="col-date">${fmtDate(b.scheduled_at)}</td>
