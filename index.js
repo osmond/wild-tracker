@@ -28,6 +28,7 @@ const {
   updateGameTotalResult,
   getOUTrackerGames,
   getGamesNeedingOddsBackfill,
+  getSettlableGames,
 } = require('./src/db');
 
 // ─── Guard: require API keys before starting ─────────────────────────────────
@@ -598,6 +599,25 @@ router.post('/admin/backfill-odds', requireAdminKey, async (req, res) => {
     total:     games.length,
     filled,
     not_found: notFound,
+  });
+});
+
+/**
+ * POST /admin/settle
+ * Immediately attempt to settle all past unsettled games by fetching
+ * their final scores from the NHL API.  Returns a count of how many
+ * games were newly settled and how many remain unsettled.
+ */
+router.post('/admin/settle', requireAdminKey, async (req, res) => {
+  const before = getSettlableGames().length;
+  await settleGames();
+  const after = getSettlableGames().length;
+  const settled = before - after;
+  return res.json({
+    ok:       true,
+    before,
+    settled,
+    remaining: after,
   });
 });
 

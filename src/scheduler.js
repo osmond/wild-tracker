@@ -318,6 +318,13 @@ function start() {
 
   // Sync schedule immediately so the DB is populated before the first poll
   syncSchedule();
+
+  // Settle any games that finished while the server was restarting.
+  // Delay 10 s so syncSchedule() has a chance to populate fresh installs first.
+  setTimeout(
+    () => settleGames().catch(err => console.error('[scheduler] Startup settle failed:', err.message)),
+    10_000,
+  );
 }
 
 module.exports = { start, syncSchedule, pollOdds, settleGames };

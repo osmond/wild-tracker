@@ -12,6 +12,7 @@ import {
   postTotalLine,
   postSync,
   postBackfillOdds,
+  postSettle,
 } from './api.js';
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -1310,6 +1311,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Opponent filter re-renders only the table rows client-side
   document.getElementById('opp-strength-filter')?.addEventListener('change', applyGamesFilter);
+
+  // Settle past games (fetch final scores)
+  document.getElementById('btn-settle')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-settle');
+    btn.disabled = true;
+    btn.textContent = 'Settling...';
+    try {
+      const result = await postSettle();
+      alert(`Settle complete: ${result.settled} games settled. ${result.remaining} still pending.`);
+      await loadAll();
+    } catch (err) {
+      console.error('Settle failed:', err);
+      alert('Settle failed — check the console.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Settle Games';
+    }
+  });
 
   // Backfill historical odds from The Odds API
   document.getElementById('btn-backfill')?.addEventListener('click', async () => {

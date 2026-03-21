@@ -103,6 +103,15 @@ export function postSync(type = 'REG') {
 }
 
 /**
+ * POST /admin/settle — fetch final scores for all unsettled past games.
+ */
+export function postSettle() {
+  const headers = {};
+  if (import.meta.env.VITE_ADMIN_KEY) headers['Authorization'] = `Bearer ${import.meta.env.VITE_ADMIN_KEY}`;
+  return apiFetch('/admin/settle', { method: 'POST', headers });
+}
+
+/**
  * POST /admin/backfill-odds — fetch historical totals+spreads for all
  * settled games missing a closing total line.
  * @param {boolean} [dryRun]  if true, returns list without making API calls
