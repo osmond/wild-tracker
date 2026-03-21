@@ -118,6 +118,48 @@ for (const colDef of GAME_CONTEXT_COLUMNS) {
   }
 }
 
+// ─── Phase B schema migrations ────────────────────────────────────────────────
+
+// games: settlement results for total and puck line
+const GAMES_PHASE_B_COLUMNS = [
+  'total_result           TEXT',    // null | 'over' | 'under' | 'push'
+  'puckline_minus_covered INTEGER', // null | 0 | 1  (win by 2+)
+];
+
+// odds_snapshots: total and spread markets
+const SNAPSHOTS_PHASE_B_COLUMNS = [
+  'total_line       REAL',
+  'over_odds        INTEGER',
+  'under_odds       INTEGER',
+  'spread_line      REAL',
+  'wild_spread_odds INTEGER',
+  'opp_spread_odds  INTEGER',
+];
+
+// game_metrics: total and spread opening/closing lines
+const METRICS_PHASE_B_COLUMNS = [
+  'opening_total_line      REAL',
+  'closing_total_line      REAL',
+  'opening_over_odds       INTEGER',
+  'closing_over_odds       INTEGER',
+  'opening_under_odds      INTEGER',
+  'closing_under_odds      INTEGER',
+  'opening_wild_spread_odds INTEGER',
+  'closing_wild_spread_odds INTEGER',
+  'opening_opp_spread_odds  INTEGER',
+  'closing_opp_spread_odds  INTEGER',
+];
+
+for (const colDef of GAMES_PHASE_B_COLUMNS) {
+  try { db.exec(`ALTER TABLE games ADD COLUMN ${colDef}`); } catch { /* exists */ }
+}
+for (const colDef of SNAPSHOTS_PHASE_B_COLUMNS) {
+  try { db.exec(`ALTER TABLE odds_snapshots ADD COLUMN ${colDef}`); } catch { /* exists */ }
+}
+for (const colDef of METRICS_PHASE_B_COLUMNS) {
+  try { db.exec(`ALTER TABLE game_metrics ADD COLUMN ${colDef}`); } catch { /* exists */ }
+}
+
 
 // ─── Games ────────────────────────────────────────────────────────────────────
 
@@ -170,17 +212,41 @@ function getSettlableGames() {
   `).all();
 }
 
-function settleGame(id, { wild_score, opponent_score, result, status }) {
+function settleGame(id, { wild_score, opponent_score, result, status, total_result, puckline_minus_covered }) {
   db.prepare(`
     UPDATE games
-    SET wild_score     = @wild_score,
-        opponent_score = @opponent_score,
-        result         = @result,
-        status         = @status,
-        settled_at     = datetime('now'),
-        updated_at     = datetime('now')
+    SET wild_score              = @wild_score,
+        opponent_score         = @opponent_score,
+        result                 = @result,
+        status                 = @status,
+        total_result           = @total_result,
+        puckline_minus_covered = @puckline_minus_covered,
+        settled_at             = datetime('now'),
+        updated_at             = datetime('now')
     WHERE id = @id
-  `).run({ id, wild_score, opponent_score, result, status });
+  `).run({
+    id,
+    wild_score,
+    opponent_score,
+    result,
+    status,
+    total_result:           total_result           ?? null,
+    puckline_minus_covered: puckline_minus_covered ?? null,
+  });
+}
+
+/**
+ * Backfill total_result + puckline_minus_covered for an already-settled game.
+ * Called by the manual entry API when a total line is posted for a closed game.
+ */
+function updateGameTotalResult(id, { total_result, puckline_minus_covered }) {
+  db.prepare(`
+    UPDATE games
+    SET total_result           = @total_result,
+        puckline_minus_covered = @puckline_minus_covered,
+        updated_at             = datetime('now')
+    WHERE id = @id
+  `).run({ id, total_result: total_result ?? null, puckline_minus_covered: puckline_minus_covered ?? null });
 }
 
 /**
@@ -262,13 +328,27 @@ function updateGameContext(sportradarId, ctx) {
 
 const stmtInsertSnapshot = db.prepare(`
   INSERT INTO odds_snapshots
-    (game_id, bookmaker, snapshot_type, captured_at, wild_moneyline, opp_moneyline, wild_implied_prob)
+    (game_id, bookmaker, snapshot_type, captured_at,
+     wild_moneyline, opp_moneyline, wild_implied_prob,
+     total_line, over_odds, under_odds,
+     spread_line, wild_spread_odds, opp_spread_odds)
   VALUES
-    (@game_id, @bookmaker, @snapshot_type, @captured_at, @wild_moneyline, @opp_moneyline, @wild_implied_prob)
+    (@game_id, @bookmaker, @snapshot_type, @captured_at,
+     @wild_moneyline, @opp_moneyline, @wild_implied_prob,
+     @total_line, @over_odds, @under_odds,
+     @spread_line, @wild_spread_odds, @opp_spread_odds)
 `);
 
 function insertSnapshot(s) {
-  return stmtInsertSnapshot.run(s);
+  return stmtInsertSnapshot.run({
+    total_line:       null,
+    over_odds:        null,
+    under_odds:       null,
+    spread_line:      null,
+    wild_spread_odds: null,
+    opp_spread_odds:  null,
+    ...s,
+  });
 }
 
 function hasOpeningSnapshot(gameId, bookmaker) {
@@ -391,20 +471,127 @@ function getCalibrationData() {
 function upsertMetrics(m) {
   db.prepare(`
     INSERT INTO game_metrics
-      (game_id, bookmaker, opening_wild_moneyline, closing_wild_moneyline,
-       opening_implied_prob, closing_implied_prob, clv, ev, calculated_at)
+      (game_id, bookmaker,
+       opening_wild_moneyline, closing_wild_moneyline,
+       opening_implied_prob, closing_implied_prob,
+       clv, ev,
+       opening_total_line, closing_total_line,
+       opening_over_odds,  closing_over_odds,
+       opening_under_odds, closing_under_odds,
+       opening_wild_spread_odds, closing_wild_spread_odds,
+       opening_opp_spread_odds,  closing_opp_spread_odds,
+       calculated_at)
     VALUES
-      (@game_id, @bookmaker, @opening_wild_moneyline, @closing_wild_moneyline,
-       @opening_implied_prob, @closing_implied_prob, @clv, @ev, datetime('now'))
+      (@game_id, @bookmaker,
+       @opening_wild_moneyline, @closing_wild_moneyline,
+       @opening_implied_prob,   @closing_implied_prob,
+       @clv, @ev,
+       @opening_total_line,      @closing_total_line,
+       @opening_over_odds,       @closing_over_odds,
+       @opening_under_odds,      @closing_under_odds,
+       @opening_wild_spread_odds, @closing_wild_spread_odds,
+       @opening_opp_spread_odds,  @closing_opp_spread_odds,
+       datetime('now'))
     ON CONFLICT(game_id, bookmaker) DO UPDATE SET
-      opening_wild_moneyline = excluded.opening_wild_moneyline,
-      closing_wild_moneyline = excluded.closing_wild_moneyline,
-      opening_implied_prob   = excluded.opening_implied_prob,
-      closing_implied_prob   = excluded.closing_implied_prob,
-      clv                    = excluded.clv,
-      ev                     = excluded.ev,
-      calculated_at          = excluded.calculated_at
-  `).run(m);
+      opening_wild_moneyline    = excluded.opening_wild_moneyline,
+      closing_wild_moneyline    = excluded.closing_wild_moneyline,
+      opening_implied_prob      = excluded.opening_implied_prob,
+      closing_implied_prob      = excluded.closing_implied_prob,
+      clv                       = excluded.clv,
+      ev                        = excluded.ev,
+      opening_total_line        = COALESCE(excluded.opening_total_line,        opening_total_line),
+      closing_total_line        = COALESCE(excluded.closing_total_line,        closing_total_line),
+      opening_over_odds         = COALESCE(excluded.opening_over_odds,         opening_over_odds),
+      closing_over_odds         = COALESCE(excluded.closing_over_odds,         closing_over_odds),
+      opening_under_odds        = COALESCE(excluded.opening_under_odds,        opening_under_odds),
+      closing_under_odds        = COALESCE(excluded.closing_under_odds,        closing_under_odds),
+      opening_wild_spread_odds  = COALESCE(excluded.opening_wild_spread_odds,  opening_wild_spread_odds),
+      closing_wild_spread_odds  = COALESCE(excluded.closing_wild_spread_odds,  closing_wild_spread_odds),
+      opening_opp_spread_odds   = COALESCE(excluded.opening_opp_spread_odds,   opening_opp_spread_odds),
+      closing_opp_spread_odds   = COALESCE(excluded.closing_opp_spread_odds,   closing_opp_spread_odds),
+      calculated_at             = excluded.calculated_at
+  `).run({
+    opening_total_line:       null,
+    closing_total_line:       null,
+    opening_over_odds:        null,
+    closing_over_odds:        null,
+    opening_under_odds:       null,
+    closing_under_odds:       null,
+    opening_wild_spread_odds: null,
+    closing_wild_spread_odds: null,
+    opening_opp_spread_odds:  null,
+    closing_opp_spread_odds:  null,
+    ...m,
+  });
+}
+
+/**
+ * Upsert a manually-entered total / spread line for a specific game.
+ * bookmaker is always 'manual'; used by POST /games/:id/total-line.
+ */
+function upsertManualLine(gameId, { total_line, over_odds, under_odds, wild_spread_odds, opp_spread_odds }) {
+  db.prepare(`
+    INSERT INTO game_metrics
+      (game_id, bookmaker,
+       closing_total_line, closing_over_odds, closing_under_odds,
+       closing_wild_spread_odds, closing_opp_spread_odds,
+       calculated_at)
+    VALUES
+      (@game_id, 'manual',
+       @total_line, @over_odds, @under_odds,
+       @wild_spread_odds, @opp_spread_odds,
+       datetime('now'))
+    ON CONFLICT(game_id, bookmaker) DO UPDATE SET
+      closing_total_line       = COALESCE(@total_line,       closing_total_line),
+      closing_over_odds        = COALESCE(@over_odds,        closing_over_odds),
+      closing_under_odds       = COALESCE(@under_odds,       closing_under_odds),
+      closing_wild_spread_odds = COALESCE(@wild_spread_odds, closing_wild_spread_odds),
+      closing_opp_spread_odds  = COALESCE(@opp_spread_odds,  closing_opp_spread_odds),
+      calculated_at            = datetime('now')
+  `).run({
+    game_id:          gameId,
+    total_line:       total_line       ?? null,
+    over_odds:        over_odds        ?? null,
+    under_odds:       under_odds       ?? null,
+    wild_spread_odds: wild_spread_odds ?? null,
+    opp_spread_odds:  opp_spread_odds  ?? null,
+  });
+}
+
+// ─── Dollar Bet Tracker ───────────────────────────────────────────────────────
+
+/**
+ * Returns every Wild game with the best available moneyline for a hypothetical
+ * $1 bet on the Wild:
+ *   - Settled games  → prefer closing line, fall back to opening
+ *   - Upcoming games → prefer opening line (closing not yet available)
+ * Ordered chronologically (oldest first) so callers can compute a running P&L.
+ */
+function getDollarBetGames() {
+  return db.prepare(`
+    SELECT
+      g.id,
+      g.scheduled_at,
+      g.home_team,
+      g.away_team,
+      g.is_home,
+      g.status,
+      g.result,
+      g.wild_score,
+      g.opponent_score,
+      COALESCE(
+        pin.closing_wild_moneyline, dk.closing_wild_moneyline,
+        fd.closing_wild_moneyline,  bm.closing_wild_moneyline,
+        pin.opening_wild_moneyline, dk.opening_wild_moneyline,
+        fd.opening_wild_moneyline,  bm.opening_wild_moneyline
+      ) AS bet_ml
+    FROM games g
+    LEFT JOIN game_metrics pin ON pin.game_id = g.id AND pin.bookmaker = 'pinnacle'
+    LEFT JOIN game_metrics dk  ON dk.game_id  = g.id AND dk.bookmaker  = 'draftkings'
+    LEFT JOIN game_metrics fd  ON fd.game_id  = g.id AND fd.bookmaker  = 'fanduel'
+    LEFT JOIN game_metrics bm  ON bm.game_id  = g.id AND bm.bookmaker  = 'betmgm'
+    ORDER BY g.scheduled_at ASC
+  `).all();
 }
 
 // ─── Aggregate Stats ──────────────────────────────────────────────────────────
@@ -464,7 +651,196 @@ function getStats() {
     ? parseFloat(((totalReturn - totalStake) / totalStake * 100).toFixed(2))
     : null;
 
-  return { ...summary, roi_pct: roi };
+  // Include current streak inline so the stats endpoint returns everything
+  const streakGames = db.prepare(`
+    SELECT result FROM games
+    WHERE result IS NOT NULL
+    ORDER BY scheduled_at DESC
+  `).all();
+  let streak = { type: null, count: 0 };
+  if (streakGames.length) {
+    const first = streakGames[0].result;
+    let count = 0;
+    for (const g of streakGames) {
+      if (g.result === first) count++;
+      else break;
+    }
+    streak = { type: first, count };
+  }
+
+  return { ...summary, roi_pct: roi, streak };
+}
+
+// ─── Puck Line Tracker ───────────────────────────────────────────────────────
+
+/**
+ * Returns every Wild game with derived puck line coverage results.
+ * covers_minus_1_5: Wild won by 2+ (covers -1.5 favourite line)
+ * covers_plus_1_5:  Wild won OR lost by exactly 1 (covers +1.5 dog line)
+ * total_goals:      combined final score
+ * Ordered chronologically so callers can compute a running record.
+ */
+function getPuckLineGames() {
+  return db.prepare(`
+    SELECT
+      g.id,
+      g.scheduled_at,
+      g.home_team,
+      g.away_team,
+      g.is_home,
+      g.status,
+      g.result,
+      g.wild_score,
+      g.opponent_score,
+      g.wild_days_rest,
+      g.opp_wins,
+      g.opp_losses,
+      g.opp_ot_losses,
+      CASE WHEN g.wild_score IS NOT NULL
+        THEN g.wild_score - g.opponent_score
+      END AS goal_diff,
+      CASE WHEN g.wild_score IS NOT NULL
+        THEN CASE WHEN (g.wild_score - g.opponent_score) >= 2 THEN 1 ELSE 0 END
+      END AS covers_minus_1_5,
+      CASE WHEN g.wild_score IS NOT NULL
+        THEN CASE WHEN (g.wild_score - g.opponent_score) >= -1 THEN 1 ELSE 0 END
+      END AS covers_plus_1_5,
+      CASE WHEN g.wild_score IS NOT NULL
+        THEN g.wild_score + g.opponent_score
+      END AS total_goals,
+      gm.closing_wild_spread_odds,
+      gm.closing_opp_spread_odds
+    FROM games g
+    LEFT JOIN game_metrics gm ON gm.game_id = g.id
+    ORDER BY g.scheduled_at ASC
+  `).all();
+}
+
+// ─── Splits ──────────────────────────────────────────────────────────────────
+
+/**
+ * Home/Away, back-to-back, and opponent-strength W/L splits.
+ */
+function getSplits() {
+  const haRows = db.prepare(`
+    SELECT
+      is_home,
+      SUM(CASE WHEN result = 'win'  THEN 1 ELSE 0 END) AS wins,
+      SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) AS losses
+    FROM games
+    WHERE result IS NOT NULL
+    GROUP BY is_home
+  `).all();
+
+  const home = haRows.find(r => r.is_home === 1) ?? { wins: 0, losses: 0 };
+  const away = haRows.find(r => r.is_home === 0) ?? { wins: 0, losses: 0 };
+
+  const b2b = db.prepare(`
+    SELECT
+      SUM(CASE WHEN result = 'win'  THEN 1 ELSE 0 END) AS wins,
+      SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) AS losses
+    FROM games
+    WHERE wild_days_rest = 1 AND result IS NOT NULL
+  `).get();
+
+  const vsWinning = db.prepare(`
+    SELECT
+      SUM(CASE WHEN result = 'win'  THEN 1 ELSE 0 END) AS wins,
+      SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) AS losses
+    FROM games
+    WHERE result IS NOT NULL
+      AND opp_wins IS NOT NULL
+      AND (opp_wins * 1.0 / NULLIF(opp_wins + opp_losses + opp_ot_losses, 0)) >= 0.5
+  `).get();
+
+  const vsLosing = db.prepare(`
+    SELECT
+      SUM(CASE WHEN result = 'win'  THEN 1 ELSE 0 END) AS wins,
+      SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) AS losses
+    FROM games
+    WHERE result IS NOT NULL
+      AND opp_wins IS NOT NULL
+      AND (opp_wins * 1.0 / NULLIF(opp_wins + opp_losses + opp_ot_losses, 0)) < 0.5
+  `).get();
+
+  return {
+    home:       { wins: home.wins ?? 0,        losses: home.losses ?? 0 },
+    away:       { wins: away.wins ?? 0,        losses: away.losses ?? 0 },
+    b2b:        { wins: b2b?.wins ?? 0,        losses: b2b?.losses ?? 0 },
+    vs_winning: { wins: vsWinning?.wins ?? 0,  losses: vsWinning?.losses ?? 0 },
+    vs_losing:  { wins: vsLosing?.wins ?? 0,   losses: vsLosing?.losses ?? 0 },
+  };
+}
+
+// ─── Current Streak ──────────────────────────────────────────────────────────
+
+function getCurrentStreak() {
+  const games = db.prepare(`
+    SELECT result FROM games
+    WHERE result IS NOT NULL
+    ORDER BY scheduled_at DESC
+  `).all();
+
+  if (!games.length) return { type: null, count: 0 };
+  const first = games[0].result;
+  let count = 0;
+  for (const g of games) {
+    if (g.result === first) count++;
+    else break;
+  }
+  return { type: first, count };
+}
+
+// ─── O/U Tracker ─────────────────────────────────────────────────────────────
+
+/**
+ * Returns every Wild game with:
+ *   - total_goals (derived from final score)
+ *   - best closing total_line (prefer pinnacle → dk → fd → betmgm → manual)
+ *   - best closing over/under odds (same preference)
+ *   - total_result already stored on the game row  ('over'|'under'|'push'|null)
+ * Ordered chronologically so callers can build running P&L curves.
+ */
+function getOUTrackerGames() {
+  return db.prepare(`
+    SELECT
+      g.id,
+      g.scheduled_at,
+      g.home_team,
+      g.away_team,
+      g.is_home,
+      g.status,
+      g.result,
+      g.wild_score,
+      g.opponent_score,
+      g.total_result,
+      CASE WHEN g.wild_score IS NOT NULL
+           THEN g.wild_score + g.opponent_score
+           ELSE NULL
+      END AS total_goals,
+      COALESCE(
+        pin.closing_total_line, dk.closing_total_line,
+        fd.closing_total_line,  bm.closing_total_line,
+        man.closing_total_line
+      ) AS total_line,
+      COALESCE(
+        pin.closing_over_odds, dk.closing_over_odds,
+        fd.closing_over_odds,  bm.closing_over_odds,
+        man.closing_over_odds
+      ) AS over_odds,
+      COALESCE(
+        pin.closing_under_odds, dk.closing_under_odds,
+        fd.closing_under_odds,  bm.closing_under_odds,
+        man.closing_under_odds
+      ) AS under_odds
+    FROM games g
+    LEFT JOIN game_metrics pin ON pin.game_id = g.id AND pin.bookmaker = 'pinnacle'
+    LEFT JOIN game_metrics dk  ON dk.game_id  = g.id AND dk.bookmaker  = 'draftkings'
+    LEFT JOIN game_metrics fd  ON fd.game_id  = g.id AND fd.bookmaker  = 'fanduel'
+    LEFT JOIN game_metrics bm  ON bm.game_id  = g.id AND bm.bookmaker  = 'betmgm'
+    LEFT JOIN game_metrics man ON man.game_id  = g.id AND man.bookmaker = 'manual'
+    ORDER BY g.scheduled_at ASC
+  `).all();
 }
 
 module.exports = {
@@ -475,6 +851,7 @@ module.exports = {
   getGamesForDate,
   getSettlableGames,
   settleGame,
+  updateGameTotalResult,
   setMyEstimate,
   updateGameContext,
   getAllGames,
@@ -485,10 +862,16 @@ module.exports = {
   getAllSnapshotsForGame,
   getAllSharpMoves,
   upsertMetrics,
+  upsertManualLine,
   insertSharpMove,
   markSharpMoveAlerted,
   getSharpMovesForGame,
   insertOrUpdatePrediction,
   getCalibrationData,
+  getDollarBetGames,
   getStats,
+  getPuckLineGames,
+  getSplits,
+  getCurrentStreak,
+  getOUTrackerGames,
 };

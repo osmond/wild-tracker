@@ -8,7 +8,7 @@ const path    = require('path');
 const { start: startScheduler }    = require('./src/scheduler');
 const { syncSchedule, pollOdds, settleGames } = require('./src/scheduler');
 const { calculateAndStoreMetrics } = require('./src/metrics');
-const { americanToImplied }        = require('./src/calculator');
+const { americanToImplied, americanToDecimal } = require('./src/calculator');
 const {
   getAllGames,
   getGameById,
@@ -18,7 +18,13 @@ const {
   setMyEstimate,
   insertOrUpdatePrediction,
   getCalibrationData,
+  getDollarBetGames,
   getStats,
+  getPuckLineGames,
+  getSplits,
+  upsertManualLine,
+  updateGameTotalResult,
+  getOUTrackerGames,
 } = require('./src/db');
 
 // ─── Guard: require API keys before starting ─────────────────────────────────
@@ -129,12 +135,234 @@ router.get('/sharp-moves', (_req, res) => {
 
 /**
  * GET /stats
- * Aggregate win rate, CLV%, average EV, and simple ROI across all
+ * Aggregate win rate, CLV%, average EV, ROI, and current streak across all
  * settled Wild games.
  */
 router.get('/stats', (_req, res) => {
   const stats = getStats();
   res.json(stats);
+});
+
+/**
+ * GET /stats/splits
+ * Home/Away, back-to-back, and opponent-strength (vs .500+, vs <.500) W/L records.
+ */
+router.get('/stats/splits', (_req, res) => {
+  res.json(getSplits());
+});
+
+/**
+ * GET /puck-line-tracker
+ * Every Wild game with derived puck line coverage results (±1.5) and total goals.
+ * Running covered/total counts computed chronologically so the UI can draw trend curves.
+ */
+router.get('/puck-line-tracker', (_req, res) => {
+  const games = getPuckLineGames();
+
+  // Convert American moneyline odds to $1 profit
+  function spreadProfit(odds) {
+    if (odds == null) return null;
+    return odds > 0 ? odds / 100 : 100 / Math.abs(odds);
+  }
+
+  let minusCovered = 0, minusTotal = 0;
+  let plusCovered  = 0, plusTotal  = 0;
+  let minusPnl = 0,     plusPnl  = 0;
+  let minusOddsBets = 0, plusOddsBets = 0;
+
+  const bets = games.map(g => {
+    const bet = {
+      game_id:          g.id,
+      scheduled_at:     g.scheduled_at,
+      home_team:        g.home_team,
+      away_team:        g.away_team,
+      is_home:          g.is_home,
+      status:           g.status,
+      result:           g.result,
+      wild_score:       g.wild_score,
+      opponent_score:   g.opponent_score,
+      goal_diff:        g.goal_diff,
+      covers_minus_1_5: g.covers_minus_1_5,
+      covers_plus_1_5:  g.covers_plus_1_5,
+      total_goals:      g.total_goals,
+      wild_spread_odds: g.closing_wild_spread_odds  ?? null,
+      opp_spread_odds:  g.closing_opp_spread_odds   ?? null,
+    };
+
+    if (g.covers_minus_1_5 !== null) {
+      if (g.covers_minus_1_5) minusCovered++;
+      minusTotal++;
+    }
+    if (g.covers_plus_1_5 !== null) {
+      if (g.covers_plus_1_5) plusCovered++;
+      plusTotal++;
+    }
+
+    // Per-game P&L — only when odds are available
+    if (g.covers_minus_1_5 !== null && g.closing_wild_spread_odds != null) {
+      const profit = spreadProfit(g.closing_wild_spread_odds);
+      bet.minus_pnl = g.covers_minus_1_5 ? profit : -1;
+      minusPnl += bet.minus_pnl;
+      minusOddsBets++;
+    } else {
+      bet.minus_pnl = null;
+    }
+
+    if (g.covers_plus_1_5 !== null && g.closing_opp_spread_odds != null) {
+      const profit = spreadProfit(g.closing_opp_spread_odds);
+      bet.plus_pnl = g.covers_plus_1_5 ? profit : -1;
+      plusPnl += bet.plus_pnl;
+      plusOddsBets++;
+    } else {
+      bet.plus_pnl = null;
+    }
+
+    bet.minus_running_covered = minusCovered;
+    bet.minus_running_total   = minusTotal;
+    bet.plus_running_covered  = plusCovered;
+    bet.plus_running_total    = plusTotal;
+    return bet;
+  });
+
+  res.json({
+    total_games:       games.length,
+    settled_games:     minusTotal,
+    minus_covered:     minusCovered,
+    minus_not_covered: minusTotal - minusCovered,
+    plus_covered:      plusCovered,
+    plus_not_covered:  plusTotal - plusCovered,
+    minus_pnl:         minusOddsBets > 0 ? parseFloat(minusPnl.toFixed(2)) : null,
+    plus_pnl:          plusOddsBets  > 0 ? parseFloat(plusPnl.toFixed(2))  : null,
+    bets,
+  });
+});
+
+/**
+ * POST /games/:id/total-line
+ * Manually enter a total (over/under) line and optional spread odds for a game.
+ * Used to backfill historical games where the odds pipeline hadn't captured
+ * markets yet. For already-settled games the total_result is computed immediately.
+ *
+ * Body (all optional except at least one field):
+ *   { "total_line": 6.5, "over_odds": -115, "under_odds": -105,
+ *     "wild_spread_odds": 180, "opp_spread_odds": -210 }
+ */
+router.post('/games/:id/total-line', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ error: 'id must be a positive integer' });
+  }
+  const game = getGameById(id);
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+
+  const { total_line, over_odds, under_odds, wild_spread_odds, opp_spread_odds } = req.body;
+
+  if (total_line !== undefined && (typeof total_line !== 'number' || total_line <= 0)) {
+    return res.status(400).json({ error: 'total_line must be a positive number' });
+  }
+
+  upsertManualLine(id, {
+    total_line:       total_line       ?? null,
+    over_odds:        over_odds        ?? null,
+    under_odds:       under_odds       ?? null,
+    wild_spread_odds: wild_spread_odds ?? null,
+    opp_spread_odds:  opp_spread_odds  ?? null,
+  });
+
+  // If game is already settled and we now have a total line, compute result immediately
+  if (game.status === 'closed' && total_line != null && game.wild_score != null) {
+    const totalGoals = game.wild_score + game.opponent_score;
+    let totalResult = null;
+    if (totalGoals > total_line)      totalResult = 'over';
+    else if (totalGoals < total_line) totalResult = 'under';
+    else                              totalResult = 'push';
+
+    const goalDiff       = game.wild_score - game.opponent_score;
+    const pucklineMinus  = game.result ? (goalDiff >= 2 ? 1 : 0) : null;
+
+    updateGameTotalResult(id, {
+      total_result:           totalResult,
+      puckline_minus_covered: pucklineMinus,
+    });
+  }
+
+  return res.json({ ok: true, game_id: id });
+});
+
+/**
+ * GET /ou-tracker
+ * Every Wild game with total line, over/under odds, total result, and running $1 P&L
+ * for "bet over every game" and "bet under every game" strategies.
+ */
+router.get('/ou-tracker', (_req, res) => {
+  const { americanToDecimal: toDecimal } = require('./src/calculator');
+  const games = getOUTrackerGames();
+
+  let overPnl  = 0;
+  let underPnl = 0;
+  let overSettled  = 0;
+  let underSettled = 0;
+
+  const bets = games.map(g => {
+    const hasLine   = g.total_line != null;
+    const settled   = g.total_result != null;
+
+    let overProfit  = null;
+    let underProfit = null;
+
+    if (settled && hasLine) {
+      if (g.total_result === 'push') {
+        overProfit  = 0;
+        underProfit = 0;
+      } else if (g.total_result === 'over') {
+        const dec = g.over_odds != null ? toDecimal(g.over_odds) : toDecimal(-110);
+        overProfit  = parseFloat((dec - 1).toFixed(4));
+        underProfit = -1;
+      } else {
+        // under
+        const dec = g.under_odds != null ? toDecimal(g.under_odds) : toDecimal(-110);
+        underProfit = parseFloat((dec - 1).toFixed(4));
+        overProfit  = -1;
+      }
+      overPnl  = parseFloat((overPnl  + overProfit).toFixed(4));
+      underPnl = parseFloat((underPnl + underProfit).toFixed(4));
+      overSettled++;
+      underSettled++;
+    }
+
+    return {
+      game_id:        g.id,
+      scheduled_at:   g.scheduled_at,
+      home_team:      g.home_team,
+      away_team:      g.away_team,
+      is_home:        g.is_home,
+      status:         g.status,
+      result:         g.result,
+      wild_score:     g.wild_score,
+      opponent_score: g.opponent_score,
+      total_goals:    g.total_goals,
+      total_line:     g.total_line,
+      over_odds:      g.over_odds,
+      under_odds:     g.under_odds,
+      total_result:   g.total_result,
+      over_profit:    overProfit,
+      under_profit:   underProfit,
+      over_running_pnl:  settled && hasLine ? overPnl  : null,
+      under_running_pnl: settled && hasLine ? underPnl : null,
+    };
+  });
+
+  res.json({
+    total_games:   games.length,
+    games_with_line: games.filter(g => g.total_line != null).length,
+    over_settled:  overSettled,
+    over_pnl:      overPnl,
+    under_pnl:     underPnl,
+    overs:  games.filter(g => g.total_result === 'over').length,
+    unders: games.filter(g => g.total_result === 'under').length,
+    pushes: games.filter(g => g.total_result === 'push').length,
+    bets,
+  });
 });
 
 /**
@@ -183,6 +411,67 @@ router.post('/games/:id/predict', (req, res) => {
 });
 
 /**
+ * GET /dollar-tracker
+ * Returns every Wild game with a hypothetical $1 bet on the Wild at the
+ * best available market moneyline (closing preferred, opening as fallback).
+ * Profit/loss is pre-computed for settled games; potential profit is included
+ * for upcoming games. A cumulative running_pnl column lets the UI draw a
+ * running-total curve without any extra maths.
+ */
+router.get('/dollar-tracker', (_req, res) => {
+  const games = getDollarBetGames();
+  let runningPnl = 0;
+  let settledCount = 0;
+
+  const bets = games.map(g => {
+    const bet = {
+      game_id:       g.id,
+      scheduled_at:  g.scheduled_at,
+      home_team:     g.home_team,
+      away_team:     g.away_team,
+      is_home:       g.is_home,
+      status:        g.status,
+      result:        g.result,
+      wild_score:    g.wild_score,
+      opponent_score: g.opponent_score,
+      bet_ml:        g.bet_ml,
+    };
+
+    if (g.result === 'win' && g.bet_ml != null) {
+      const profit = americanToDecimal(g.bet_ml) - 1;
+      bet.profit      = parseFloat(profit.toFixed(4));
+      runningPnl     += profit;
+      settledCount   += 1;
+    } else if (g.result === 'win') {
+      // Win but no odds available — can't compute payout
+      bet.profit      = null;
+      bet.no_odds     = true;
+      settledCount   += 1;
+    } else if (g.result === 'loss') {
+      bet.profit      = -1;
+      runningPnl     -= 1;
+      settledCount   += 1;
+    } else {
+      // Upcoming / live — show what a win would pay
+      bet.profit           = null;
+      bet.potential_profit = g.bet_ml != null
+        ? parseFloat((americanToDecimal(g.bet_ml) - 1).toFixed(4))
+        : null;
+    }
+
+    bet.running_pnl = parseFloat(runningPnl.toFixed(4));
+    return bet;
+  });
+
+  res.json({
+    total_games:   games.length,
+    settled_games: settledCount,
+    total_pnl:     parseFloat(runningPnl.toFixed(4)),
+    bets,
+  });
+});
+
+/**
  * GET /stats/calibration
  * Returns all (my_prob, outcome) pairs for games that have a prediction
  * stored via POST /games/:id/predict.
@@ -216,11 +505,15 @@ function requireAdminKey(req, res, next) {
 /**
  * POST /sync
  * Immediately re-sync the Wild schedule from SportRadar.
+ * Optional body: { "type": "REG" | "PST" }
+ * Optional query: ?type=PST
  */
-router.post('/sync', requireAdminKey, async (_req, res) => {
+router.post('/sync', requireAdminKey, async (req, res) => {
+  const raw  = (req.query.type ?? req.body?.type ?? 'REG').toString().toUpperCase();
+  const type = ['REG', 'PST', 'PRE'].includes(raw) ? raw : 'REG';
   try {
-    await syncSchedule();
-    res.json({ ok: true, message: 'Schedule synced' });
+    await syncSchedule(type);
+    res.json({ ok: true, message: `Schedule synced (${type})` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -95,6 +95,42 @@ canvas { display: block; }
   color: var(--text-secondary);
 }
 
+/* Season type toggle (REG / Playoffs) */
+.season-toggle {
+  display: flex;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.season-toggle-btn {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.season-toggle-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.season-toggle-btn.active {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.season-toggle-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .btn-refresh {
   display: flex;
   align-items: center;
@@ -131,7 +167,7 @@ canvas { display: block; }
 /* ─── Stats bar ─────────────────────────────────────────────────────────────── */
 .stats-bar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 1rem;
 }
 
@@ -250,6 +286,7 @@ canvas { display: block; }
   color: var(--text-secondary);
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -499,6 +536,53 @@ canvas { display: block; }
   padding: 2rem 0.5rem;
 }
 
+/* ─── Dollar bet tracker ────────────────────────────────────────────────────── */
+.dollar-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+}
+
+.dollar-chart-wrap {
+  position: relative;
+  height: 200px;
+  margin-top: 0.5rem;
+}
+
+.dollar-table .col-right {
+  text-align: right;
+}
+
+.dollar-table-wrap {
+  margin-top: 1rem;
+}
+
+.dollar-row td { vertical-align: middle; }
+
+.dollar-profit,
+.dollar-running {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dollar-profit.positive,
+.dollar-running.positive { color: var(--green); }
+
+.dollar-profit.negative,
+.dollar-running.negative { color: var(--red); }
+
+.dollar-running.neutral { color: var(--text-secondary); }
+
+.dollar-potential {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* ─── Calibration chart ─────────────────────────────────────────────────────── */
 .calibration-section {
   background: var(--surface);
@@ -528,12 +612,231 @@ canvas { display: block; }
   border: 1px solid var(--border);
 }
 
+/* ─── Streak badge ──────────────────────────────────────────────────────────── */
+.streak-win  { color: var(--green); }
+.streak-loss { color: var(--red); }
+
+/* ─── Splits bar ────────────────────────────────────────────────────────────── */
+.splits-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.split-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.split-label {
+  font-size: 0.68rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+
+.split-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.split-positive { color: var(--green); }
+.split-negative { color: var(--red); }
+
+/* ─── Games filter ──────────────────────────────────────────────────────────── */
+.filter-select {
+  appearance: none;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  padding: 0.3rem 0.65rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.filter-select:hover {
+  border-color: var(--border-hover, #484f58);
+}
+
+.b2b-badge {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 600;
+  background: rgba(221, 189, 94, 0.15);
+  color: #ddbd5e;
+  border: 1px solid rgba(221, 189, 94, 0.35);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  vertical-align: middle;
+  margin-left: 0.3rem;
+  letter-spacing: 0.04em;
+}
+
+/* ─── Monthly P&L chart ─────────────────────────────────────────────────────── */
+.monthly-chart-header {
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin-top: 1.25rem;
+}
+
+.dollar-monthly-wrap {
+  position: relative;
+  height: 110px;
+  margin-top: 0.5rem;
+}
+
+/* ─── Puck line tracker ─────────────────────────────────────────────────────── */
+.puckline-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+}
+
+.puckline-summary {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.pl-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.85rem;
+}
+
+.pl-chip-label {
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.pl-chip-value {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.pl-chip-pct {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.pl-chip-pnl {
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.pl-chip-pnl.positive { color: #3fb950; }
+.pl-chip-pnl.negative { color: #f85149; }
+
+.puckline-chart-wrap {
+  position: relative;
+  height: 180px;
+  margin-top: 0.75rem;
+}
+
+.puckline-table-wrap {
+  margin-top: 1rem;
+}
+
+/* ─── Total goals scatter ───────────────────────────────────────────────────── */
+.scatter-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+}
+
+.scatter-chart-wrap {
+  position: relative;
+  height: 200px;
+  margin-top: 0.75rem;
+}
+
+/* ─── O/U tracker ───────────────────────────────────────────────────────────── */
+.ou-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+}
+
+.ou-chart-wrap {
+  position: relative;
+  height: 180px;
+  margin-top: 0.75rem;
+}
+
+.ou-table-wrap {
+  margin-top: 1rem;
+}
+
+.enter-line-btn {
+  font-size: 0.72rem;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.enter-line-btn:hover {
+  background: var(--surface-alt);
+  color: var(--text-primary);
+}
+
+/* ─── Badge helpers ─────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 0.1rem 0.45rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.badge-green   { background: rgba(63,185,80,0.15);  color: #3fb950; border: 1px solid rgba(63,185,80,0.3); }
+.badge-red     { background: rgba(248,81,73,0.15);  color: #f85149; border: 1px solid rgba(248,81,73,0.3); }
+.badge-blue    { background: rgba(56,139,253,0.15); color: #388bfd; border: 1px solid rgba(56,139,253,0.3); }
+.badge-neutral { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+
 /* ─── Responsive ────────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .stats-bar { grid-template-columns: repeat(3, 1fr); }
+}
+
 @media (max-width: 900px) {
   .stats-bar { grid-template-columns: repeat(2, 1fr); }
   .content-grid { grid-template-columns: 1fr; }
   .sharp-sidebar { position: static; max-height: 360px; }
   .calibration-wrap { height: 220px; }
+  .dollar-chart-wrap { height: 160px; }
 }
 
 @media (max-width: 560px) {

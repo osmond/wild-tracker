@@ -18,6 +18,10 @@
         </div>
         <div class="header-meta">
           <span class="season-label" id="season-label">Minnesota Wild</span>
+          <div class="season-toggle" id="season-toggle" role="group" aria-label="Season type">
+            <button class="season-toggle-btn active" data-type="REG">Regular Season</button>
+            <button class="season-toggle-btn" data-type="PST">Playoffs</button>
+          </div>
           <button class="btn-refresh" id="btn-refresh" title="Refresh all data">
             <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
               <path d="M1.5 1.5A.5.5 0 0 1 2 1h4a.5.5 0 0 1 0 1H3.5A6.5 6.5 0 1 1 2 8.5a.5.5 0 0 1 1 0 5.5 5.5 0 1 0 1.096-3.3L5.5 6.5A.5.5 0 0 1 5 7H1a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5z"/>
@@ -46,10 +50,44 @@
           <span class="stat-value loading">—</span>
           <span class="stat-sub">per unit staked</span>
         </div>
+        <div class="stat-card" id="stat-dollar-pnl">
+          <span class="stat-label">$1/game P&amp;L</span>
+          <span class="stat-value loading">—</span>
+          <span class="stat-sub" id="stat-dollar-pnl-sub">settled games</span>
+        </div>
         <div class="stat-card" id="stat-sharp">
           <span class="stat-label">Sharp Moves</span>
           <span class="stat-value loading">—</span>
           <span class="stat-sub">detected this season</span>
+        </div>
+        <div class="stat-card" id="stat-streak">
+          <span class="stat-label">Streak</span>
+          <span class="stat-value loading">—</span>
+          <span class="stat-sub">current run</span>
+        </div>
+      </section>
+
+      <!-- ─── Splits Bar ─────────────────────────────────────────────────── -->
+      <section class="splits-bar" id="splits-bar" aria-label="Record splits">
+        <div class="split-card">
+          <span class="split-label">Home</span>
+          <span class="split-value" id="split-home">—</span>
+        </div>
+        <div class="split-card">
+          <span class="split-label">Away</span>
+          <span class="split-value" id="split-away">—</span>
+        </div>
+        <div class="split-card">
+          <span class="split-label">Back-to-Back</span>
+          <span class="split-value" id="split-b2b">—</span>
+        </div>
+        <div class="split-card">
+          <span class="split-label">vs .500+</span>
+          <span class="split-value" id="split-vs-winning">—</span>
+        </div>
+        <div class="split-card">
+          <span class="split-label">vs &lt;.500</span>
+          <span class="split-value" id="split-vs-losing">—</span>
         </div>
       </section>
 
@@ -61,6 +99,12 @@
           <div class="section-header">
             <h2 class="section-title">Games</h2>
             <span class="games-count" id="games-count"></span>
+            <select class="filter-select" id="opp-strength-filter" title="Filter by opponent strength">
+              <option value="all">All opponents</option>
+              <option value="winning">vs .500+ teams</option>
+              <option value="losing">vs &lt;.500 teams</option>
+              <option value="b2b">Back-to-back games</option>
+            </select>
           </div>
 
           <div class="table-wrap">
@@ -131,6 +175,128 @@
         <p class="calibration-empty" id="calibration-empty" hidden>
           No predictions logged yet. Use <code>POST /games/:id/predict</code> to record your model's probability estimates.
         </p>
+      </section>
+
+      <!-- ─── Dollar Tracker ────────────────────────────────────────────── -->
+      <section class="dollar-section" aria-label="Dollar bet tracker">
+        <div class="section-header">
+          <h2 class="section-title">$1 Bet Tracker</h2>
+          <span class="section-sub">Every game assumes a $1 bet on the Wild at the market closing line. No input needed — just curiosity.</span>
+          <span class="games-count" id="dollar-game-count"></span>
+        </div>
+
+        <!-- Running P&L chart -->
+        <div class="dollar-chart-wrap">
+          <canvas id="dollar-pnl-chart"></canvas>
+        </div>
+
+        <!-- Monthly P&L bar chart -->
+        <div class="monthly-chart-header">Monthly P&amp;L</div>
+        <div class="dollar-monthly-wrap">
+          <canvas id="dollar-monthly-chart"></canvas>
+        </div>
+
+        <!-- Per-game table -->
+        <div class="table-wrap dollar-table-wrap">
+          <table class="games-table dollar-table" id="dollar-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Opponent</th>
+                <th>H/A</th>
+                <th>Line</th>
+                <th>Result</th>
+                <th class="col-right">Profit/Loss</th>
+                <th class="col-right">Running P&amp;L</th>
+              </tr>
+            </thead>
+            <tbody id="dollar-tbody">
+              <tr class="row-loading"><td colspan="7">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ─── Puck Line Coverage ──────────────────────────────────────── -->
+      <section class="puckline-section" aria-label="Puck line coverage tracker">
+        <div class="section-header">
+          <h2 class="section-title">Puck Line Coverage</h2>
+          <span class="section-sub">Did the Wild cover ±1.5 goals? Derived from final scores — no odds needed.</span>
+          <span class="games-count" id="puckline-game-count"></span>
+        </div>
+
+        <div class="puckline-summary" id="puckline-summary"></div>
+
+        <div class="puckline-chart-wrap">
+          <canvas id="puckline-chart"></canvas>
+        </div>
+
+        <div class="table-wrap puckline-table-wrap">
+          <table class="games-table" id="puckline-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Opponent</th>
+                <th>H/A</th>
+                <th>Score</th>
+                <th>-1.5 Cover</th>
+                <th>+1.5 Cover</th>
+                <th class="col-right">Total Goals</th>
+                <th class="col-right">-1.5 P&amp;L</th>
+                <th class="col-right">+1.5 P&amp;L</th>
+              </tr>
+            </thead>
+            <tbody id="puckline-tbody">
+              <tr class="row-loading"><td colspan="9">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ─── Total Goals Scatter ───────────────────────────────────────── -->
+      <section class="scatter-section" aria-label="Total goals per game">
+        <div class="section-header">
+          <h2 class="section-title">Total Goals Per Game</h2>
+          <span class="section-sub">Combined final score for every settled Wild game this season. Taller bars = higher-scoring games.</span>
+        </div>
+        <div class="scatter-chart-wrap">
+          <canvas id="total-goals-chart"></canvas>
+        </div>
+      </section>
+
+      <!-- ─── O/U Tracker ───────────────────────────────────────────────── -->
+      <section class="ou-section" aria-label="Over/Under bet tracker">
+        <div class="section-header">
+          <h2 class="section-title">Over / Under Tracker</h2>
+          <span class="games-count" id="ou-game-count"></span>
+        </div>
+
+        <div id="ou-summary" class="ou-summary"></div>
+
+        <div class="ou-chart-wrap">
+          <canvas id="ou-pnl-chart"></canvas>
+        </div>
+
+        <div class="table-wrap ou-table-wrap">
+          <table class="data-table ou-table">
+            <thead>
+              <tr>
+                <th class="col-date">Date</th>
+                <th>Opponent</th>
+                <th>H/A</th>
+                <th>Score</th>
+                <th>Total</th>
+                <th>Line</th>
+                <th>Result</th>
+                <th class="col-right">Over P&L</th>
+                <th class="col-right">Under P&L</th>
+              </tr>
+            </thead>
+            <tbody id="ou-tbody">
+              <tr><td colspan="9" class="empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
     </main>

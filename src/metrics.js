@@ -61,6 +61,18 @@ function calculateAndStoreMetrics(gameId, myMoneyline) {
       closing_implied_prob:   canonicalClose?.wild_implied_prob ?? null,
       clv,
       ev,
+      // Totals — opening = first snapshot with a total_line; closing = latest closing snap
+      opening_total_line:       openingSnap?.total_line              ?? null,
+      closing_total_line:       closingSnap?.total_line ?? (hourlySnaps.find(s => s.total_line != null)?.total_line ?? null),
+      opening_over_odds:        openingSnap?.over_odds               ?? null,
+      closing_over_odds:        closingSnap?.over_odds               ?? null,
+      opening_under_odds:       openingSnap?.under_odds              ?? null,
+      closing_under_odds:       closingSnap?.under_odds              ?? null,
+      // Spreads
+      opening_wild_spread_odds: openingSnap?.wild_spread_odds        ?? null,
+      closing_wild_spread_odds: canonicalClose?.wild_spread_odds     ?? null,
+      opening_opp_spread_odds:  openingSnap?.opp_spread_odds         ?? null,
+      closing_opp_spread_odds:  canonicalClose?.opp_spread_odds      ?? null,
     });
   }
 }

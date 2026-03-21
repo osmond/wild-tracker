@@ -59,13 +59,15 @@ function matchOddsToGame(oddsEvent, dbGames) {
 /**
  * Pull the full Wild schedule from SportRadar and upsert every game.
  * Only the status is protected from accidental downgrade once 'closed'.
+ *
+ * @param {'REG'|'PST'|'PRE'} [seasonType='REG']
  */
-async function syncSchedule() {
-  console.log('[scheduler] Syncing Wild schedule from SportRadar…');
+async function syncSchedule(seasonType = 'REG') {
+  console.log(`[scheduler] Syncing Wild schedule (${seasonType}) from SportRadar…`);
   try {
     const year  = deriveSeasonYear();
     console.log(`[scheduler] Using season year: ${year}`);
-    const games = await fetchSeasonSchedule(year);
+    const games = await fetchSeasonSchedule(year, seasonType);
 
     for (const g of games) {
       upsertGame(g);
@@ -75,7 +77,7 @@ async function syncSchedule() {
     // Pull contextual data (days rest + opponent standings) and persist it.
     // This is a separate API call; failures here don't abort the schedule sync.
     try {
-      const contextMap = await fetchContextForWildGames(year);
+      const contextMap = await fetchContextForWildGames(year, seasonType);
       let contextCount = 0;
       for (const [sportradarId, ctx] of Object.entries(contextMap)) {
         updateGameContext(sportradarId, ctx);
@@ -158,6 +160,12 @@ async function pollOdds() {
         wild_moneyline:    odds.wild_moneyline,
         opp_moneyline:     odds.opp_moneyline,
         wild_implied_prob: odds.wild_implied_prob,
+        total_line:        odds.total_line        ?? null,
+        over_odds:         odds.over_odds         ?? null,
+        under_odds:        odds.under_odds        ?? null,
+        spread_line:       odds.spread_line       ?? null,
+        wild_spread_odds:  odds.wild_spread_odds  ?? null,
+        opp_spread_odds:   odds.opp_spread_odds   ?? null,
       });
 
       const sign = odds.wild_moneyline > 0 ? '+' : '';
@@ -230,11 +238,38 @@ async function settleGames() {
       const oppScore   = isHome ? result.away_score : result.home_score;
       const gameResult = determineResult(isHome, result.home_score, result.away_score);
 
+      // Derive total / puck line results if a closing total line exists
+      const totalGoals = wildScore + oppScore;
+      const goalDiff   = wildScore - oppScore;
+
+      // Pull the closing total line from any bookmaker (prefer pinnacle)
+      const closingTotalLine = (() => {
+        const snap = [
+          getSnapshotsByType(game.id, 'pinnacle',   'closing'),
+          getSnapshotsByType(game.id, 'draftkings', 'closing'),
+          getSnapshotsByType(game.id, 'fanduel',    'closing'),
+          getSnapshotsByType(game.id, 'betmgm',     'closing'),
+        ].flat().find(s => s.total_line != null);
+        return snap?.total_line ?? null;
+      })();
+
+      let totalResult = null;
+      if (closingTotalLine != null) {
+        if (totalGoals > closingTotalLine)  totalResult = 'over';
+        else if (totalGoals < closingTotalLine) totalResult = 'under';
+        else totalResult = 'push';
+      }
+
+      // -1.5 puck line: Wild wins by 2+
+      const pucklineMinus = gameResult ? (goalDiff >= 2 ? 1 : 0) : null;
+
       settleGame(game.id, {
-        wild_score:     wildScore,
-        opponent_score: oppScore,
-        result:         gameResult,
-        status:         'closed',
+        wild_score:             wildScore,
+        opponent_score:         oppScore,
+        result:                 gameResult,
+        status:                 'closed',
+        total_result:           totalResult,
+        puckline_minus_covered: pucklineMinus,
       });
 
       console.log(
