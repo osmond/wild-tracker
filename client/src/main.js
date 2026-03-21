@@ -11,6 +11,7 @@ import {
   fetchOUTracker,
   postTotalLine,
   postSync,
+  postBackfillOdds,
 } from './api.js';
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -1309,6 +1310,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Opponent filter re-renders only the table rows client-side
   document.getElementById('opp-strength-filter')?.addEventListener('change', applyGamesFilter);
+
+  // Backfill historical odds from The Odds API
+  document.getElementById('btn-backfill')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-backfill');
+    btn.disabled = true;
+    btn.textContent = 'Fetching…';
+    try {
+      const result = await postBackfillOdds();
+      alert(`Backfill complete: ${result.filled}/${result.total} games filled. Credits remaining: ${result.credits_remaining}`);
+      loadAll();
+    } catch (err) {
+      console.error('Backfill failed:', err);
+      alert('Backfill failed — check the console. You may be out of Odds API credits.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Backfill Odds';
+    }
+  });
 
   // O/U "enter line" buttons (event delegation — rows are re-rendered each load)
   document.getElementById('ou-tbody')?.addEventListener('click', async (e) => {

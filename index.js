@@ -9,6 +9,7 @@ const { start: startScheduler }    = require('./src/scheduler');
 const { syncSchedule, pollOdds, settleGames } = require('./src/scheduler');
 const { calculateAndStoreMetrics } = require('./src/metrics');
 const { americanToImplied, americanToDecimal } = require('./src/calculator');
+const { fetchHistoricalWildOdds } = require('./src/odds-fetcher');
 const {
   getAllGames,
   getGameById,
@@ -23,8 +24,10 @@ const {
   getPuckLineGames,
   getSplits,
   upsertManualLine,
+  upsertMetrics,
   updateGameTotalResult,
   getOUTrackerGames,
+  getGamesNeedingOddsBackfill,
 } = require('./src/db');
 
 // ─── Guard: require API keys before starting ─────────────────────────────────
@@ -501,6 +504,105 @@ function requireAdminKey(req, res, next) {
 
   return res.status(401).json({ error: 'Unauthorized' });
 }
+
+/**
+ * POST /admin/backfill-odds
+ * Fetch historical totals + spreads odds from The Odds API for every settled
+ * game that is missing a closing total line, and upsert them into game_metrics.
+ * Also computes total_result for each game once the line is known.
+ *
+ * Query: ?dryRun=true  — returns the list of games to backfill without API calls.
+ *
+ * NOTE: Each game costs 10 Odds API credits. The response includes the
+ * remaining credit count so you can monitor usage.
+ */
+router.post('/admin/backfill-odds', requireAdminKey, async (req, res) => {
+  const dryRun   = req.query.dryRun === 'true';
+  const games    = getGamesNeedingOddsBackfill();
+
+  if (dryRun) {
+    return res.json({
+      dry_run:     true,
+      games_count: games.length,
+      credits_est: games.length * 10,
+      games:       games.map(g => ({
+        id:           g.id,
+        scheduled_at: g.scheduled_at,
+        home_team:    g.home_team,
+        away_team:    g.away_team,
+      })),
+    });
+  }
+
+  const results  = [];
+  let filled     = 0;
+  let notFound   = 0;
+  let lastRemaining;
+
+  for (const game of games) {
+    try {
+      const { lines, remaining } = await fetchHistoricalWildOdds(game.scheduled_at);
+      if (remaining !== undefined) lastRemaining = remaining;
+
+      if (!lines || lines.length === 0) {
+        results.push({ game_id: game.id, status: 'not_found' });
+        notFound++;
+      } else {
+        // Upsert each bookmaker's lines
+        for (const bm of lines) {
+          upsertMetrics({
+            game_id:                  game.id,
+            bookmaker:                bm.bookmaker,
+            opening_wild_moneyline:   null,
+            closing_wild_moneyline:   null,
+            opening_implied_prob:     null,
+            closing_implied_prob:     null,
+            clv:                      null,
+            ev:                       null,
+            closing_total_line:       bm.total_line,
+            closing_over_odds:        bm.over_odds,
+            closing_under_odds:       bm.under_odds,
+            closing_wild_spread_odds: bm.wild_spread_odds,
+            closing_opp_spread_odds:  bm.opp_spread_odds,
+          });
+        }
+
+        // Compute total_result if we have a line and a final score
+        const bestLine = lines.find(l => l.total_line != null);
+        if (bestLine && game.wild_score != null) {
+          const totalGoals = game.wild_score + game.opponent_score;
+          let total_result = null;
+          if (totalGoals > bestLine.total_line)      total_result = 'over';
+          else if (totalGoals < bestLine.total_line) total_result = 'under';
+          else                                        total_result = 'push';
+
+          const goalDiff = game.wild_score - game.opponent_score;
+          updateGameTotalResult(game.id, {
+            total_result,
+            puckline_minus_covered: game.result ? (goalDiff >= 2 ? 1 : 0) : null,
+          });
+        }
+
+        results.push({ game_id: game.id, status: 'ok', bookmakers: lines.map(l => l.bookmaker) });
+        filled++;
+      }
+    } catch (err) {
+      results.push({ game_id: game.id, status: 'error', error: err.message });
+    }
+
+    // Small delay to be polite to the API
+    await new Promise(r => setTimeout(r, 250));
+  }
+
+  return res.json({
+    ok:             true,
+    total:          games.length,
+    filled,
+    not_found:      notFound,
+    credits_remaining: lastRemaining ?? 'unknown',
+    results,
+  });
+});
 
 /**
  * POST /sync

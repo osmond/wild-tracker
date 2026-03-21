@@ -154,6 +154,22 @@ canvas { display: block; }
 .btn-refresh.spinning svg { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.btn-backfill {
+  display: flex;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  background: var(--surface-alt);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.btn-backfill:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.btn-backfill:disabled { opacity: 0.5; cursor: default; }
+
 /* ─── Main layout ───────────────────────────────────────────────────────────── */
 .main {
   max-width: 1400px;

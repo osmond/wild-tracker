@@ -843,6 +843,26 @@ function getOUTrackerGames() {
   `).all();
 }
 
+// ─── Odds Backfill ────────────────────────────────────────────────────────────
+
+/**
+ * Returns all settled games that have no closing total line in game_metrics.
+ * Used by the automated odds backfill route.
+ */
+function getGamesNeedingOddsBackfill() {
+  return db.prepare(`
+    SELECT g.id, g.scheduled_at, g.home_team, g.away_team, g.is_home,
+           g.wild_score, g.opponent_score, g.result
+    FROM games g
+    WHERE g.status = 'closed'
+      AND g.id NOT IN (
+        SELECT DISTINCT game_id FROM game_metrics
+        WHERE closing_total_line IS NOT NULL
+      )
+    ORDER BY g.scheduled_at ASC
+  `).all();
+}
+
 module.exports = {
   db,
   upsertGame,
@@ -874,4 +894,5 @@ module.exports = {
   getSplits,
   getCurrentStreak,
   getOUTrackerGames,
+  getGamesNeedingOddsBackfill,
 };

@@ -105,4 +105,64 @@ async function fetchWildOdds() {
   return results;
 }
 
-module.exports = { fetchWildOdds };
+/**
+ * Fetch historical NHL odds from The Odds API at a specific past timestamp.
+ * Returns the bookmaker lines for the Wild game on that date, or null if
+ * the Wild were not listed.
+ *
+ * NOTE: This endpoint costs 10 API credits per call (vs 1 for live odds).
+ *
+ * @param {string} isoTimestamp  ISO-8601 UTC datetime (e.g. game's scheduled_at)
+ * @returns {Promise<{ lines: Array|null, remaining: string|undefined, used: string|undefined }>}
+ */
+async function fetchHistoricalWildOdds(isoTimestamp) {
+  const { data: body, headers } = await axios.get(`${BASE_URL}/sports/${SPORT_KEY}/odds-history`, {
+    params: {
+      apiKey:     process.env.ODDS_API_KEY,
+      regions:    'us',
+      markets:    'h2h,totals,spreads',
+      bookmakers: BOOKMAKERS,
+      oddsFormat: 'american',
+      date:       isoTimestamp,
+    },
+    timeout: 15_000,
+  });
+
+  const remaining = headers['x-requests-remaining'];
+  const used      = headers['x-requests-used'];
+
+  const events = Array.isArray(body) ? body : (body.data ?? []);
+
+  // Find the Wild event in this snapshot
+  const wildEvent = events.find(
+    e => e.home_team === WILD_NAME || e.away_team === WILD_NAME,
+  );
+
+  if (!wildEvent) return { lines: null, remaining, used };
+
+  const lines = [];
+
+  for (const bm of wildEvent.bookmakers ?? []) {
+    const totalsMarket   = bm.markets?.find(m => m.key === 'totals');
+    const overOutcome    = totalsMarket?.outcomes?.find(o => o.name === 'Over');
+    const underOutcome   = totalsMarket?.outcomes?.find(o => o.name === 'Under');
+    const spreadsMarket  = bm.markets?.find(m => m.key === 'spreads');
+    const wildSpread     = spreadsMarket?.outcomes?.find(o => o.name === WILD_NAME);
+    const oppSpread      = spreadsMarket?.outcomes?.find(o => o.name !== WILD_NAME);
+
+    if (!overOutcome && !wildSpread) continue;
+
+    lines.push({
+      bookmaker:        bm.key,
+      total_line:       overOutcome?.point   ?? null,
+      over_odds:        overOutcome?.price   ?? null,
+      under_odds:       underOutcome?.price  ?? null,
+      wild_spread_odds: wildSpread?.price    ?? null,
+      opp_spread_odds:  oppSpread?.price     ?? null,
+    });
+  }
+
+  return { lines, remaining, used };
+}
+
+module.exports = { fetchWildOdds, fetchHistoricalWildOdds };

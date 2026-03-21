@@ -7,8 +7,8 @@
 
 const BASE = '/api';
 
-async function apiFetch(path) {
-  const res = await fetch(`${BASE}${path}`);
+async function apiFetch(path, options = {}) {
+  const res = await fetch(`${BASE}${path}`, options);
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`API ${path} → ${res.status}: ${text}`);
@@ -100,6 +100,20 @@ export function postSync(type = 'REG') {
     headers['Authorization'] = `Bearer ${import.meta.env.VITE_ADMIN_KEY}`;
   }
   return apiFetch(`/sync?type=${encodeURIComponent(type)}`, { method: 'POST', headers });
+}
+
+/**
+ * POST /admin/backfill-odds — fetch historical totals+spreads for all
+ * settled games missing a closing total line.
+ * @param {boolean} [dryRun]  if true, returns list without making API calls
+ */
+export function postBackfillOdds(dryRun = false) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (import.meta.env.VITE_ADMIN_KEY) {
+    headers['Authorization'] = `Bearer ${import.meta.env.VITE_ADMIN_KEY}`;
+  }
+  const qs = dryRun ? '?dryRun=true' : '';
+  return apiFetch(`/admin/backfill-odds${qs}`, { method: 'POST', headers });
 }
 
 /**
