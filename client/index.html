@@ -68,6 +68,11 @@
           <span class="stat-value loading">—</span>
           <span class="stat-sub">current run</span>
         </div>
+        <div class="stat-card" id="stat-ou-record">
+          <span class="stat-label">O/U Record</span>
+          <span class="stat-value loading">—</span>
+          <span class="stat-sub" id="stat-ou-sub">overs vs unders</span>
+        </div>
       </section>
 
       <!-- ─── Splits Bar ─────────────────────────────────────────────────── -->
@@ -91,6 +96,10 @@
         <div class="split-card">
           <span class="split-label">vs &lt;.500</span>
           <span class="split-value" id="split-vs-losing">—</span>
+        </div>
+        <div class="split-card">
+          <span class="split-label">Last 10</span>
+          <span class="split-value" id="split-l10">—</span>
         </div>
       </section>
 
@@ -146,6 +155,7 @@
               </div>
             </div>
             <div class="detail-body">
+              <div class="game-context-strip" id="game-context-strip" hidden></div>
               <div class="chart-container">
                 <canvas id="odds-timeline-chart"></canvas>
               </div>

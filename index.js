@@ -654,6 +654,9 @@ router.post('/admin/backfill-snapshots', requireAdminKey, async (req, res) => {
         });
       }
 
+      // Derive opening/closing metrics (CLV etc.) from the inserted snapshots
+      calculateAndStoreMetrics(game.id, null);
+
       results.push({ game_id: game.id, status: 'ok' });
       filled++;
     } catch (err) {

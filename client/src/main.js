@@ -74,7 +74,7 @@ function opponent(game) {
 
 // ─── Stats bar ────────────────────────────────────────────────────────────────
 
-function renderStats(stats, sharpCount) {
+function renderStats(stats, sharpCount, ouData) {
   const setText = (selector, text) => {
     const el = document.querySelector(selector);
     if (el) { el.textContent = text; el.classList.remove('loading'); }
@@ -114,6 +114,16 @@ function renderStats(stats, sharpCount) {
       el.classList.add(isWin ? 'positive' : 'negative');
     } else {
       el.textContent = '—';
+    }
+  }
+
+  // O/U record
+  if (ouData) {
+    const total = ouData.overs + ouData.unders;
+    setText('#stat-ou-record .stat-value', `${ouData.overs}O–${ouData.unders}U`);
+    if (total > 0) {
+      const pct = ((ouData.overs / total) * 100).toFixed(1);
+      setText('#stat-ou-sub', `${pct}% overs (${total + ouData.pushes} games)`);
     }
   }
 }
@@ -160,6 +170,7 @@ function renderSplits(splits) {
   set('split-b2b',        splits.b2b.wins,        splits.b2b.losses);
   set('split-vs-winning', splits.vs_winning.wins, splits.vs_winning.losses);
   set('split-vs-losing',  splits.vs_losing.wins,  splits.vs_losing.losses);
+  set('split-l10',        splits.last10?.wins ?? 0, splits.last10?.losses ?? 0);
 }
 
 // ─── Games table ──────────────────────────────────────────────────────────────
@@ -278,6 +289,25 @@ async function onGameRowClick(gameId, row) {
       `Odds Timeline — Wild ${ha} ${opp} · ${fmtDate(game.scheduled_at)}`;
 
     renderOddsTimeline(snapshots ?? []);
+
+    // Context strip for settled games
+    const strip = document.getElementById('game-context-strip');
+    if (strip) {
+      if (game.result) {
+        const score = `${game.wild_score}–${game.opponent_score} ${game.result === 'win' ? 'W' : 'L'}`;
+        const ouPart = game.total_result
+          ? ` · Total: ${game.wild_score + game.opponent_score} goals (${game.total_result.toUpperCase()})`
+          : '';
+        const plPart = game.puckline_minus_covered != null
+          ? ` · -1.5: ${game.puckline_minus_covered ? '✓' : '✕'}`
+          : '';
+        strip.innerHTML = `<span class="ctx-score">${score}</span><span class="ctx-details">${ouPart}${plPart}</span>`;
+        strip.hidden = false;
+      } else {
+        strip.hidden = true;
+        strip.innerHTML = '';
+      }
+    }
   } catch (err) {
     document.getElementById('detail-title').textContent = 'Error loading timeline';
     console.error('Game detail error:', err);
@@ -925,10 +955,12 @@ function renderOUTracker(data) {
     const underSign = data.under_pnl >= 0 ? '+' : '';
     const overCls   = data.over_pnl  >= 0 ? 'positive' : 'negative';
     const underCls  = data.under_pnl >= 0 ? 'positive' : 'negative';
+    const ouTotal = data.overs + data.unders;
+    const ouPct = ouTotal > 0 ? ((data.overs / ouTotal) * 100).toFixed(1) : null;
     summary.innerHTML = `
       <div class="pl-chip">
         <span class="pl-chip-label">Overs</span>
-        <span class="pl-chip-value">${data.overs}W–${data.unders + data.pushes}L</span>
+        <span class="pl-chip-value">${data.overs}W–${data.unders + data.pushes}L${ouPct != null ? ` <span class="pl-chip-pct">${ouPct}%</span>` : ''}</span>
       </div>
       <div class="pl-chip">
         <span class="pl-chip-label">Unders</span>
@@ -1089,6 +1121,7 @@ async function loadAll() {
     renderStats(
       statsRes.value,
       sharpRes.status === 'fulfilled' ? sharpRes.value.count : null,
+      ouRes.status === 'fulfilled' ? ouRes.value : null,
     );
   } else {
     console.warn('Stats fetch failed:', statsRes.reason);

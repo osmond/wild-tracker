@@ -769,7 +769,20 @@ function getSplits() {
     b2b:        { wins: b2b?.wins ?? 0,        losses: b2b?.losses ?? 0 },
     vs_winning: { wins: vsWinning?.wins ?? 0,  losses: vsWinning?.losses ?? 0 },
     vs_losing:  { wins: vsLosing?.wins ?? 0,   losses: vsLosing?.losses ?? 0 },
+    last10:     computeLast10(),
   };
+}
+
+function computeLast10() {
+  const rows = db.prepare(`
+    SELECT result FROM games
+    WHERE result IS NOT NULL
+    ORDER BY scheduled_at DESC
+    LIMIT 10
+  `).all();
+  const wins   = rows.filter(r => r.result === 'win').length;
+  const losses = rows.filter(r => r.result === 'loss').length;
+  return { wins, losses };
 }
 
 // ─── Current Streak ──────────────────────────────────────────────────────────

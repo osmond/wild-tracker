@@ -490,6 +490,28 @@ canvas { display: block; }
   padding: 1rem;
 }
 
+.game-context-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--surface-2, #1c2128);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  flex-wrap: wrap;
+}
+
+.ctx-score {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ctx-details {
+  color: var(--text-muted, #8b949e);
+}
+
 .chart-container {
   position: relative;
   height: 220px;
