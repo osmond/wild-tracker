@@ -131,7 +131,7 @@ function renderDollarStatCard(data) {
   }
 
   const pnl = data.total_pnl;
-  const sign = pnl >= 0 ? '+' : '';
+  const sign = pnl >= 0 ? '+' : '-';
   el.textContent = `${sign}$${Math.abs(pnl).toFixed(2)}`;
   el.classList.add(pnl >= 0 ? 'positive' : 'negative');
   if (sub) sub.textContent = `${data.settled_games} settled games`;
@@ -1027,7 +1027,7 @@ function ouResultBadge(result) {
 
 function fmtPnl(v) {
   if (v == null) return '<span class="dollar-potential">—</span>';
-  const sign = v > 0 ? '+' : '';
+  const sign = v > 0 ? '+' : v < 0 ? '-' : '';
   const cls  = v > 0 ? 'positive' : v < 0 ? 'negative' : 'neutral';
   return `<span class="dollar-profit ${cls}">${sign}$${Math.abs(v).toFixed(2)}</span>`;
 }
