@@ -224,4 +224,91 @@ async function fetchHistoricalWildOddsFromESPN(scheduledAt, isHome) {
   return { lines };
 }
 
-module.exports = { fetchWildOdds, fetchHistoricalWildOdds, fetchHistoricalWildOddsFromESPN };
+/**
+ * Fetch open + closing moneyline snapshots for a past Wild game from ESPN.
+ * ESPN exposes both the opening and closing moneyline in the summary endpoint,
+ * giving us 2 data points for the odds timeline even for completed games.
+ *
+ * @param {string} scheduledAt  ISO-8601 UTC datetime stored in games.scheduled_at
+ * @param {boolean|0|1} isHome  Whether the Wild are the home team
+ * @returns {Promise<{ open: object|null, close: object|null }>}
+ *   Each snapshot has: { wild_moneyline, opp_moneyline, wild_implied_prob,
+ *                        total_line, over_odds, under_odds,
+ *                        spread_line, wild_spread_odds, opp_spread_odds }
+ */
+async function fetchESPNSnapshots(scheduledAt, isHome) {
+  const dt = new Date(scheduledAt);
+  const datesToTry = [dt, new Date(dt.getTime() - 86_400_000)].map(d =>
+    d.toISOString().slice(0, 10).replace(/-/g, ''),
+  );
+
+  let espnEventId = null;
+  for (const date of datesToTry) {
+    const { data: scoreboard } = await axios.get(
+      `https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=${date}`,
+      { timeout: 10_000 },
+    );
+    const ev = (scoreboard.events ?? []).find(e =>
+      e.competitions?.[0]?.competitors?.some(c => c.team?.abbreviation === 'MIN'),
+    );
+    if (ev) { espnEventId = ev.id; break; }
+  }
+
+  if (!espnEventId) return { open: null, close: null };
+
+  const { data: summary } = await axios.get(
+    `https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/summary?event=${espnEventId}`,
+    { timeout: 10_000 },
+  );
+
+  const pc = summary.pickcenter?.[0];
+  if (!pc) return { open: null, close: null };
+
+  // Parse American-odds strings like "+150" or "-180"
+  const parseOdds = (s) => (s == null ? null : parseInt(s, 10));
+  // Parse line strings like "o5.5" or "+1.5" → float
+  const parseLine = (s) => (s == null ? null : parseFloat(s.replace(/^[uo]/, '')));
+
+  const ml  = pc.moneyline;       // { home: { open: { odds }, close: { odds } }, away: … }
+  const tot = pc.total;           // { over: { open: { line, odds }, close: … }, under: … }
+  const spd = pc.pointSpread;     // { home: { open: { line, odds }, close: … }, away: … }
+
+  const homeKey = isHome ? 'home' : 'away';
+  const awayKey = isHome ? 'away' : 'home';
+
+  function buildSnapshot(phase) {
+    const wildML  = parseOdds(ml?.[homeKey]?.[phase]?.odds);
+    const oppML   = parseOdds(ml?.[awayKey]?.[phase]?.odds);
+    if (wildML == null) return null;
+
+    const wildImplied = wildML < 0
+      ? (-wildML) / (-wildML + 100)
+      : 100 / (wildML + 100);
+
+    const totalLine      = parseLine(tot?.over?.[phase]?.line);
+    const overOdds       = parseOdds(tot?.over?.[phase]?.odds);
+    const underOdds      = parseOdds(tot?.under?.[phase]?.odds);
+    const wildSpreadOdds = parseOdds(spd?.[homeKey]?.[phase]?.odds);
+    const oppSpreadOdds  = parseOdds(spd?.[awayKey]?.[phase]?.odds);
+    const spreadLine     = parseLine(spd?.[homeKey]?.[phase]?.line);
+
+    return {
+      wild_moneyline:   wildML,
+      opp_moneyline:    oppML,
+      wild_implied_prob: wildImplied,
+      total_line:       totalLine,
+      over_odds:        overOdds,
+      under_odds:       underOdds,
+      spread_line:      spreadLine,
+      wild_spread_odds: wildSpreadOdds,
+      opp_spread_odds:  oppSpreadOdds,
+    };
+  }
+
+  return {
+    open:  buildSnapshot('open'),
+    close: buildSnapshot('close'),
+  };
+}
+
+module.exports = { fetchWildOdds, fetchHistoricalWildOdds, fetchHistoricalWildOddsFromESPN, fetchESPNSnapshots };

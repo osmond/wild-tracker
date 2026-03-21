@@ -863,6 +863,19 @@ function getGamesNeedingOddsBackfill() {
   `).all();
 }
 
+/** Closed games that have no entries in odds_snapshots at all. */
+function getGamesNeedingSnapshotBackfill() {
+  return db.prepare(`
+    SELECT g.id, g.scheduled_at, g.home_team, g.away_team, g.is_home
+    FROM games g
+    WHERE g.status = 'closed'
+      AND g.id NOT IN (
+        SELECT DISTINCT game_id FROM odds_snapshots
+      )
+    ORDER BY g.scheduled_at ASC
+  `).all();
+}
+
 module.exports = {
   db,
   upsertGame,
@@ -895,4 +908,5 @@ module.exports = {
   getCurrentStreak,
   getOUTrackerGames,
   getGamesNeedingOddsBackfill,
+  getGamesNeedingSnapshotBackfill,
 };

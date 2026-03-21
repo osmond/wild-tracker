@@ -11,6 +11,7 @@ import {
   postTotalLine,
   postSync,
   postBackfillOdds,
+  postBackfillSnapshots,
   postSettle,
 } from './api.js';
 
@@ -1214,6 +1215,24 @@ document.addEventListener('DOMContentLoaded', () => {
     } finally {
       btn.disabled = false;
       btn.textContent = 'Backfill Odds';
+    }
+  });
+
+  // Backfill open/close moneyline snapshots (odds timeline) from ESPN
+  document.getElementById('btn-backfill-snaps')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-backfill-snaps');
+    btn.disabled = true;
+    btn.textContent = 'Fetching…';
+    try {
+      const result = await postBackfillSnapshots();
+      const note = result.not_found > 0 ? ` (${result.not_found} games too old for ESPN)` : '';
+      alert(`Timeline backfill complete: ${result.filled}/${result.total} games filled.${note}`);
+    } catch (err) {
+      console.error('Snapshot backfill failed:', err);
+      alert('Snapshot backfill failed — check the console.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Backfill Timeline';
     }
   });
 

@@ -9,7 +9,7 @@ const { start: startScheduler }    = require('./src/scheduler');
 const { syncSchedule, pollOdds, settleGames } = require('./src/scheduler');
 const { calculateAndStoreMetrics } = require('./src/metrics');
 const { americanToImplied, americanToDecimal } = require('./src/calculator');
-const { fetchHistoricalWildOddsFromESPN } = require('./src/odds-fetcher');
+const { fetchHistoricalWildOddsFromESPN, fetchESPNSnapshots } = require('./src/odds-fetcher');
 const {
   getAllGames,
   getGameById,
@@ -28,6 +28,8 @@ const {
   updateGameTotalResult,
   getOUTrackerGames,
   getGamesNeedingOddsBackfill,
+  getGamesNeedingSnapshotBackfill,
+  insertSnapshot,
   getSettlableGames,
 } = require('./src/db');
 
@@ -596,6 +598,73 @@ router.post('/admin/backfill-odds', requireAdminKey, async (req, res) => {
   return res.json({
     ok:        true,
     source:    'espn',
+    total:     games.length,
+    filled,
+    not_found: notFound,
+  });
+});
+
+/**
+ * POST /admin/backfill-snapshots
+ * For every closed game that has no odds snapshots, fetch the ESPN opening
+ * and closing moneylines and insert them as two synthetic snapshots.
+ * This gives the odds timeline chart 2 data points (open → close) for
+ * past games in ESPN's ~16-week retention window.
+ */
+router.post('/admin/backfill-snapshots', requireAdminKey, async (req, res) => {
+  const games = getGamesNeedingSnapshotBackfill();
+  let filled = 0;
+  let notFound = 0;
+  const results = [];
+
+  for (const game of games) {
+    try {
+      const { open, close } = await fetchESPNSnapshots(game.scheduled_at, game.is_home);
+
+      if (!open && !close) {
+        results.push({ game_id: game.id, status: 'not_found' });
+        notFound++;
+        await new Promise(r => setTimeout(r, 250));
+        continue;
+      }
+
+      const gameDate = new Date(game.scheduled_at);
+      // Opening snapshot: morning of game day (noon UTC)
+      const openTime = new Date(gameDate);
+      openTime.setUTCHours(12, 0, 0, 0);
+      // Closing snapshot: just before puck drop
+      const closeTime = new Date(gameDate.getTime() - 5 * 60_000);
+
+      if (open) {
+        insertSnapshot({
+          game_id:       game.id,
+          bookmaker:     'draftkings',
+          snapshot_type: 'opening',
+          captured_at:   openTime.toISOString(),
+          ...open,
+        });
+      }
+      if (close) {
+        insertSnapshot({
+          game_id:       game.id,
+          bookmaker:     'draftkings',
+          snapshot_type: 'hourly',
+          captured_at:   closeTime.toISOString(),
+          ...close,
+        });
+      }
+
+      results.push({ game_id: game.id, status: 'ok' });
+      filled++;
+    } catch (err) {
+      results.push({ game_id: game.id, status: 'error', error: err.message });
+    }
+
+    await new Promise(r => setTimeout(r, 250));
+  }
+
+  return res.json({
+    ok:        true,
     total:     games.length,
     filled,
     not_found: notFound,

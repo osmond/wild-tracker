@@ -120,6 +120,14 @@ export function postBackfillOdds(dryRun = false) {
   return apiFetch(`/admin/backfill-odds${qs}`, { method: 'POST', headers });
 }
 
+export function postBackfillSnapshots() {
+  const headers = { 'Content-Type': 'application/json' };
+  if (import.meta.env.VITE_ADMIN_KEY) {
+    headers['Authorization'] = `Bearer ${import.meta.env.VITE_ADMIN_KEY}`;
+  }
+  return apiFetch('/admin/backfill-snapshots', { method: 'POST', headers });
+}
+
 /**
  * POST /games/:id/predict — log model probability for a game.
  * @param {number} gameId
