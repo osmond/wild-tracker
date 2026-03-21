@@ -21,11 +21,6 @@ export function fetchStats() {
   return apiFetch('/stats');
 }
 
-/** GET /stats/calibration — { count, calibration: [{ game_id, my_prob, outcome, … }] } */
-export function fetchCalibration() {
-  return apiFetch('/stats/calibration');
-}
-
 /** GET /games — { count, games: [game…] } */
 export function fetchGames() {
   return apiFetch('/games');

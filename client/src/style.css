@@ -613,35 +613,6 @@ canvas { display: block; }
   font-style: italic;
 }
 
-/* ─── Calibration chart ─────────────────────────────────────────────────────── */
-.calibration-section {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 1rem 1.25rem;
-}
-
-.calibration-wrap {
-  position: relative;
-  height: 280px;
-}
-
-.calibration-empty {
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  padding: 2rem 0;
-}
-
-.calibration-empty code {
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  background: var(--surface-alt);
-  padding: 0.1rem 0.4rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-}
-
 /* ─── Streak badge ──────────────────────────────────────────────────────────── */
 .streak-win  { color: var(--green); }
 .streak-loss { color: var(--red); }
@@ -881,7 +852,6 @@ tr:hover .edit-line-btn { opacity: 1; }
   .stats-bar { grid-template-columns: repeat(2, 1fr); }
   .content-grid { grid-template-columns: 1fr; }
   .sharp-sidebar { position: static; max-height: 360px; }
-  .calibration-wrap { height: 220px; }
   .dollar-chart-wrap { height: 160px; }
 }
 

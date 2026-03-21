@@ -3,7 +3,6 @@ import {
   fetchStats,
   fetchGames,
   fetchGameDetail,
-  fetchCalibration,
   fetchSharpMoves,
   fetchDollarTracker,
   fetchPuckLineTracker,
@@ -18,7 +17,6 @@ import {
 // ─── State ────────────────────────────────────────────────────────────────────
 
 let oddsChart      = null;
-let calibChart     = null;
 let dollarChart    = null;
 let monthlyChart   = null;
 let pucklineChart  = null;
@@ -422,129 +420,6 @@ function toggleBook(book, chip) {
     meta.hidden = !visibleBooks.has(ds.label);
   });
   oddsChart.update();
-}
-
-// ─── Calibration chart ────────────────────────────────────────────────────────
-
-function renderCalibration(rows) {
-  const emptyEl = document.getElementById('calibration-empty');
-  const wrapEl  = document.querySelector('.calibration-wrap');
-
-  // Only plot rows that have both a prediction and a settled outcome
-  const settled = rows.filter(r => r.outcome !== null && r.outcome !== undefined && r.my_prob != null);
-
-  if (!settled.length) {
-    if (emptyEl) emptyEl.hidden = false;
-    if (wrapEl)  wrapEl.style.display = 'none';
-    return;
-  }
-
-  if (emptyEl) emptyEl.hidden = true;
-
-  // Scatter data  (raw points)
-  const rawPoints = settled.map(r => ({ x: r.my_prob, y: r.outcome }));
-
-  // Binned averages: 10 equally-spaced bins from 0 to 1
-  const bins = Array.from({ length: 10 }, (_, i) => {
-    const lo = i * 0.1;
-    const hi = lo + 0.1;
-    const inBin = settled.filter(r => r.my_prob >= lo && r.my_prob < hi);
-    if (!inBin.length) return null;
-    const avgProb = inBin.reduce((s, r) => s + r.my_prob, 0) / inBin.length;
-    const avgOut  = inBin.reduce((s, r) => s + r.outcome, 0) / inBin.length;
-    return { x: avgProb, y: avgOut };
-  }).filter(Boolean);
-
-  if (calibChart) calibChart.destroy();
-
-  const ctx = document.getElementById('calibration-chart').getContext('2d');
-  calibChart = new Chart(ctx, {
-    type: 'scatter',
-    data: {
-      datasets: [
-        {
-          // Perfect calibration diagonal
-          label: 'Perfect calibration',
-          type: 'line',
-          data: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
-          borderColor: '#30363d',
-          borderDash: [5, 4],
-          borderWidth: 1.5,
-          pointRadius: 0,
-          fill: false,
-        },
-        {
-          // Raw observations
-          label: 'Predictions',
-          data: rawPoints,
-          backgroundColor: 'rgba(56,139,253,0.35)',
-          borderColor: 'rgba(56,139,253,0.6)',
-          pointRadius: 5,
-          pointHoverRadius: 7,
-        },
-        {
-          // Binned average line
-          label: 'Calibration (binned)',
-          type: 'line',
-          data: bins,
-          borderColor: '#3fb950',
-          backgroundColor: '#3fb950',
-          borderWidth: 2,
-          pointRadius: 5,
-          pointHoverRadius: 7,
-          fill: false,
-          tension: 0.3,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          labels: { color: '#8b949e', boxWidth: 12, font: { size: 11 } },
-        },
-        tooltip: {
-          backgroundColor: '#161b22',
-          borderColor: '#30363d',
-          borderWidth: 1,
-          titleColor: '#8b949e',
-          bodyColor: '#e6edf3',
-          callbacks: {
-            label: (item) => {
-              if (item.datasetIndex === 0) return null;
-              const { x, y } = item.raw;
-              return ` Predicted ${(x * 100).toFixed(0)}% → Actual ${(y * 100).toFixed(0)}%`;
-            },
-          },
-        },
-      },
-      scales: {
-        x: {
-          type: 'linear',
-          min: 0, max: 1,
-          title: { display: true, text: 'Predicted probability', color: '#8b949e', font: { size: 11 } },
-          ticks: {
-            color: '#8b949e',
-            callback: (v) => `${(v * 100).toFixed(0)}%`,
-          },
-          grid: { color: '#21262d' },
-          border: { color: '#30363d' },
-        },
-        y: {
-          type: 'linear',
-          min: -0.05, max: 1.05,
-          title: { display: true, text: 'Actual outcome', color: '#8b949e', font: { size: 11 } },
-          ticks: {
-            color: '#8b949e',
-            callback: (v) => v === 0 ? 'Loss' : v === 1 ? 'Win' : '',
-          },
-          grid: { color: '#21262d' },
-          border: { color: '#30363d' },
-        },
-      },
-    },
-  });
 }
 
 // ─── Sharp moves feed ─────────────────────────────────────────────────────────
@@ -1179,11 +1054,10 @@ async function loadAll() {
   const btn = document.getElementById('btn-refresh');
   if (btn) btn.classList.add('spinning');
 
-  const [statsRes, gamesRes, calibRes, sharpRes, dollarRes, pucklineRes, splitsRes, ouRes] =
+  const [statsRes, gamesRes, sharpRes, dollarRes, pucklineRes, splitsRes, ouRes] =
     await Promise.allSettled([
       fetchStats(),
       fetchGames(),
-      fetchCalibration(),
       fetchSharpMoves(),
       fetchDollarTracker(),
       fetchPuckLineTracker(),
@@ -1223,12 +1097,6 @@ async function loadAll() {
     renderSplits(splitsRes.value);
   } else {
     console.warn('Splits fetch failed:', splitsRes.reason);
-  }
-
-  if (calibRes.status === 'fulfilled') {
-    renderCalibration(calibRes.value.calibration ?? []);
-  } else {
-    console.warn('Calibration fetch failed:', calibRes.reason);
   }
 
   if (dollarRes.status === 'fulfilled') {
