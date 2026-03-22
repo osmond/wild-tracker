@@ -615,7 +615,13 @@ function getStats() {
       ROUND(AVG(pin.ev),  4)                                          AS avg_ev_pinnacle,
       ROUND(AVG(dk.ev),   4)                                          AS avg_ev_draftkings,
       ROUND(AVG(fd.ev),   4)                                          AS avg_ev_fanduel,
-      ROUND(AVG(bm.ev),   4)                                          AS avg_ev_betmgm
+      ROUND(AVG(bm.ev),   4)                                          AS avg_ev_betmgm,
+      ROUND(AVG(CASE WHEN pin.opening_implied_prob IS NOT NULL AND pin.closing_implied_prob IS NOT NULL
+        THEN (pin.closing_implied_prob / pin.opening_implied_prob - 1) * 100 END), 2) AS avg_mkt_clv_pinnacle,
+      ROUND(AVG(CASE WHEN dk.opening_implied_prob IS NOT NULL AND dk.closing_implied_prob IS NOT NULL
+        THEN (dk.closing_implied_prob  / dk.opening_implied_prob  - 1) * 100 END), 2) AS avg_mkt_clv_draftkings,
+      ROUND(AVG(CASE WHEN fd.opening_implied_prob IS NOT NULL AND fd.closing_implied_prob IS NOT NULL
+        THEN (fd.closing_implied_prob  / fd.opening_implied_prob  - 1) * 100 END), 2) AS avg_mkt_clv_fanduel
     FROM games g
     LEFT JOIN game_metrics pin ON pin.game_id = g.id AND pin.bookmaker = 'pinnacle'
     LEFT JOIN game_metrics dk  ON dk.game_id  = g.id AND dk.bookmaker  = 'draftkings'
@@ -628,12 +634,24 @@ function getStats() {
   const closedRows = db.prepare(`
     SELECT
       g.result,
-      COALESCE(pin.closing_wild_moneyline, dk.closing_wild_moneyline) AS closing_ml
+      COALESCE(
+        pin.closing_wild_moneyline, dk.closing_wild_moneyline,
+        fd.closing_wild_moneyline,  bm.closing_wild_moneyline,
+        pin.opening_wild_moneyline, dk.opening_wild_moneyline,
+        fd.opening_wild_moneyline,  bm.opening_wild_moneyline
+      ) AS closing_ml
     FROM games g
     LEFT JOIN game_metrics pin ON pin.game_id = g.id AND pin.bookmaker = 'pinnacle'
     LEFT JOIN game_metrics dk  ON dk.game_id  = g.id AND dk.bookmaker  = 'draftkings'
+    LEFT JOIN game_metrics fd  ON fd.game_id  = g.id AND fd.bookmaker  = 'fanduel'
+    LEFT JOIN game_metrics bm  ON bm.game_id  = g.id AND bm.bookmaker  = 'betmgm'
     WHERE g.result IS NOT NULL
-      AND COALESCE(pin.closing_wild_moneyline, dk.closing_wild_moneyline) IS NOT NULL
+      AND COALESCE(
+        pin.closing_wild_moneyline, dk.closing_wild_moneyline,
+        fd.closing_wild_moneyline,  bm.closing_wild_moneyline,
+        pin.opening_wild_moneyline, dk.opening_wild_moneyline,
+        fd.opening_wild_moneyline,  bm.opening_wild_moneyline
+      ) IS NOT NULL
   `).all();
 
   const { americanToDecimal } = require('./calculator');

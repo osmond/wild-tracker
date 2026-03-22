@@ -22,9 +22,11 @@
             <button class="season-toggle-btn active" data-type="REG">Regular Season</button>
             <button class="season-toggle-btn" data-type="PST">Playoffs</button>
           </div>
-          <button class="btn-settle" id="btn-settle" title="Fetch final scores for all past games">Settle Games</button>
-          <button class="btn-backfill" id="btn-backfill" title="Fetch historical totals &amp; spreads for past games">Backfill Odds</button>
-          <button class="btn-backfill-snaps" id="btn-backfill-snaps" title="Backfill open/close moneyline snapshots for past games">Backfill Timeline</button>
+          <div class="admin-tools" title="Admin tools — triggers data writes">
+            <button class="btn-admin" id="btn-settle" title="Fetch final scores for all past games">Settle</button>
+            <button class="btn-admin" id="btn-backfill" title="Fetch historical totals &amp; spreads for past games">Backfill Odds</button>
+            <button class="btn-admin" id="btn-backfill-snaps" title="Backfill open/close moneyline snapshots for past games">Backfill Timeline</button>
+          </div>
           <button class="btn-refresh" id="btn-refresh" title="Refresh all data">
             <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
               <path d="M1.5 1.5A.5.5 0 0 1 2 1h4a.5.5 0 0 1 0 1H3.5A6.5 6.5 0 1 1 2 8.5a.5.5 0 0 1 1 0 5.5 5.5 0 1 0 1.096-3.3L5.5 6.5A.5.5 0 0 1 5 7H1a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5z"/>
@@ -36,12 +38,24 @@
     </header>
 
     <main class="main">
+      <!-- ─── Last Game Banner ─────────────────────────────────────────── -->
+      <div class="last-game-banner" id="last-game-banner" hidden>
+        <span class="last-game-tag">Last Game</span>
+        <span id="lgm-matchup">—</span>
+        <span class="lgm-sep">·</span>
+        <span id="lgm-result" class="lgm-result">—</span>
+        <span id="lgm-line" hidden></span>
+        <span id="lgm-clv" class="lgm-clv" hidden></span>
+        <a class="lgm-view-link" href="#sec-games">View in table ↓</a>
+      </div>
+
       <!-- ─── Stats Bar ─────────────────────────────────────────────────── -->
       <section class="stats-bar" id="stats-bar" aria-label="Summary statistics">
         <div class="stat-card" id="stat-win-rate">
           <span class="stat-label">Win Rate</span>
           <span class="stat-value loading">—</span>
           <span class="stat-sub" id="stat-win-record">0W – 0L</span>
+          <span class="stat-sub stat-sub-dim">break-even ~52.4%</span>
         </div>
         <div class="stat-card" id="stat-clv">
           <span class="stat-label">Avg CLV</span>
@@ -102,6 +116,16 @@
           <span class="split-value" id="split-l10">—</span>
         </div>
       </section>
+
+      <!-- ─── Section Nav ──────────────────────────────────────────────── -->
+      <nav class="section-nav" aria-label="Jump to section">
+        <span class="section-nav-label">Sections</span>
+        <a class="section-nav-link" href="#sec-games">Games</a>
+        <a class="section-nav-link" href="#sec-dollar">$1 Tracker</a>
+        <a class="section-nav-link" href="#sec-puckline">Puck Line</a>
+        <a class="section-nav-link" href="#sec-goals">Total Goals</a>
+        <a class="section-nav-link" href="#sec-ou">O/U</a>
+      </nav>
 
       <!-- ─── Games ────────────────────────────────────────────────────── -->
       <section class="games-section collapsible-section" id="sec-games" aria-label="Games">
@@ -299,6 +323,7 @@
 
     </main>
 
+    <button class="back-to-top" id="back-to-top" aria-label="Back to top" hidden>↑</button>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

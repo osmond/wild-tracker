@@ -68,6 +68,12 @@ function fmtPct(val, decimals = 1) {
   return `${val > 0 ? '+' : ''}${p}%`;
 }
 
+// CLV values are already stored as percentages (e.g. 4.01 = +4.01%)
+function fmtClv(val, decimals = 2) {
+  if (val == null) return '—';
+  return `${val > 0 ? '+' : ''}${val.toFixed(decimals)}%`;
+}
+
 function opponent(game) {
   return game.is_home ? game.away_team : game.home_team;
 }
@@ -83,6 +89,10 @@ function renderStats(stats, sharpCount, ouData) {
     const el = document.querySelector(selector);
     if (el) el.classList.add(cls);
   };
+  const setNoData = (selector) => {
+    const el = document.querySelector(selector);
+    if (el) el.classList.add('no-data');
+  };
 
   // Win rate
   setText('#stat-win-rate .stat-value',
@@ -90,19 +100,31 @@ function renderStats(stats, sharpCount, ouData) {
   setText('#stat-win-record',
     `${stats.wins ?? 0}W – ${stats.losses ?? 0}L`);
 
-  // CLV (prefer Pinnacle, fall back to DraftKings, then FanDuel)
+  // CLV: prefer user estimate vs Pinnacle close, fall back to opening→closing market shift
   const clvRaw = stats.avg_clv_pinnacle ?? stats.avg_clv_draftkings ?? stats.avg_clv_fanduel;
-  const clvText = clvRaw != null ? fmtPct(clvRaw, 2) : '—';
-  setText('#stat-clv .stat-value', clvText);
-  if (clvRaw != null) setClass('#stat-clv .stat-value', clvRaw >= 0 ? 'positive' : 'negative');
+  const mktClvRaw = stats.avg_mkt_clv_pinnacle ?? stats.avg_mkt_clv_draftkings ?? stats.avg_mkt_clv_fanduel;
+  const displayClv = clvRaw ?? mktClvRaw;
+  setText('#stat-clv .stat-value', displayClv != null ? fmtClv(displayClv, 2) : '—');
+  if (displayClv != null) {
+    setClass('#stat-clv .stat-value', displayClv >= 0 ? 'positive' : 'negative');
+    setText('#stat-clv .stat-sub', clvRaw != null ? 'vs Pinnacle close' : 'opening→close shift');
+  } else {
+    setNoData('#stat-clv .stat-value');
+    setText('#stat-clv .stat-sub', 'no odds data yet');
+  }
 
   // ROI
   const roiText = stats.roi_pct != null ? `${stats.roi_pct}%` : '—';
   setText('#stat-roi .stat-value', roiText);
-  if (stats.roi_pct != null) setClass('#stat-roi .stat-value', stats.roi_pct >= 0 ? 'positive' : 'negative');
+  if (stats.roi_pct != null) {
+    setClass('#stat-roi .stat-value', stats.roi_pct >= 0 ? 'positive' : 'negative');
+  } else {
+    setNoData('#stat-roi .stat-value');
+  }
 
-  // Sharp moves count
+  // Sharp moves — show count and explain the detection threshold
   setText('#stat-sharp .stat-value', sharpCount != null ? String(sharpCount) : '—');
+  setText('#stat-sharp .stat-sub', '≥10-pt line shift detected');
 
   // Streak
   const el = document.querySelector('#stat-streak .stat-value');
@@ -114,16 +136,22 @@ function renderStats(stats, sharpCount, ouData) {
       el.classList.add(isWin ? 'positive' : 'negative');
     } else {
       el.textContent = '—';
+      el.classList.add('no-data');
     }
   }
 
-  // O/U record
+  // O/U record — only show a number when total lines have actually been entered
   if (ouData) {
     const total = ouData.overs + ouData.unders;
-    setText('#stat-ou-record .stat-value', `${ouData.overs}O–${ouData.unders}U`);
-    if (total > 0) {
+    if (total === 0) {
+      setText('#stat-ou-record .stat-value', '—');
+      setNoData('#stat-ou-record .stat-value');
+      setText('#stat-ou-sub',
+        ouData.games_with_line > 0 ? 'results pending' : 'no lines entered yet');
+    } else {
+      setText('#stat-ou-record .stat-value', `${ouData.overs}O–${ouData.unders}U`);
       const pct = ((ouData.overs / total) * 100).toFixed(1);
-      setText('#stat-ou-sub', `${pct}% overs (${total + ouData.pushes} games)`);
+      setText('#stat-ou-sub', `${pct}% overs · ${ouData.games_with_line} games`);
     }
   }
 }
@@ -178,7 +206,7 @@ function renderSplits(splits) {
 function clvBadge(clv) {
   if (clv == null) return '<span class="badge badge-neutral">—</span>';
   const cls = clv > 0 ? 'badge-green' : 'badge-red';
-  return `<span class="badge ${cls}">${fmtPct(clv, 1)}</span>`;
+  return `<span class="badge ${cls}">${fmtClv(clv, 1)}</span>`;
 }
 
 function resultBadge(game) {
@@ -1081,6 +1109,60 @@ function renderOUTracker(data) {
   });
 }
 
+// ─── Last game highlight banner ──────────────────────────────────────────────
+
+function renderLastGame(games) {
+  const banner = document.getElementById('last-game-banner');
+  if (!banner) return;
+
+  const last = games.find(g => g.result != null);
+  if (!last) { banner.hidden = true; return; }
+
+  const opp  = last.is_home ? last.away_team : last.home_team;
+  const ha   = last.is_home ? 'vs' : '@';
+
+  document.getElementById('lgm-matchup').textContent =
+    `Wild ${ha} ${opp} · ${fmtDate(last.scheduled_at)}`;
+
+  const resultEl = document.getElementById('lgm-result');
+  resultEl.textContent = `${last.result === 'win' ? 'W' : 'L'} ${last.wild_score}–${last.opponent_score}`;
+  resultEl.className = `lgm-result ${last.result === 'win' ? 'win' : 'loss'}`;
+
+  const closeML = last.pin_closing_ml ?? last.dk_closing_ml ?? last.fd_closing_ml;
+  const openML  = last.pin_opening_ml ?? last.dk_opening_ml ?? last.fd_opening_ml;
+  const lineEl  = document.getElementById('lgm-line');
+  if (closeML != null) {
+    lineEl.textContent = `Close ${fmtML(closeML)}`;
+    lineEl.hidden = false;
+  } else if (openML != null) {
+    lineEl.textContent = `Open ${fmtML(openML)}`;
+    lineEl.hidden = false;
+  } else {
+    lineEl.hidden = true;
+  }
+
+  // Market CLV: opening→closing implied probability shift (both stored as [0,1] fractions)
+  const clvEl   = document.getElementById('lgm-clv');
+  const openPr  = last.pin_opening_prob  ?? last.dk_opening_prob;
+  const closePr = last.pin_closing_prob  ?? last.dk_closing_prob;
+  const storedClv = last.pin_clv ?? last.dk_clv;
+  let clvNum = null;
+  if (openPr && closePr) {
+    clvNum = (closePr / openPr - 1) * 100; // compute as percentage
+  } else if (storedClv != null) {
+    clvNum = storedClv; // already stored as percentage
+  }
+  if (clvNum != null) {
+    clvEl.textContent = `CLV ${fmtClv(clvNum, 1)}`;
+    clvEl.className   = `lgm-clv ${clvNum >= 0 ? 'positive' : 'negative'}`;
+    clvEl.hidden = false;
+  } else {
+    clvEl.hidden = true;
+  }
+
+  banner.hidden = false;
+}
+
 // ─── Refresh ──────────────────────────────────────────────────────────────────────────
 
 async function loadAll() {
@@ -1108,6 +1190,7 @@ async function loadAll() {
   if (gamesRes.status === 'fulfilled') {
     allGames = gamesRes.value.games ?? [];
     renderGamesTable(allGames);
+    renderLastGame(allGames);
   } else {
     console.warn('Games fetch failed:', gamesRes.reason);
     document.getElementById('games-tbody').innerHTML =
@@ -1242,7 +1325,7 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('Settle failed — check the console.');
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Settle Games';
+      btn.textContent = 'Settle';
     }
   });
 
@@ -1302,6 +1385,26 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('Failed to save. Check the console.');
     }
   });
+
+  // Section nav — expand collapsed sections when jumping to them
+  document.querySelectorAll('.section-nav-link').forEach(link => {
+    link.addEventListener('click', () => {
+      const href = link.getAttribute('href');
+      if (!href?.startsWith('#')) return;
+      const section = document.querySelector(href);
+      if (section?.classList.contains('collapsed')) {
+        section.classList.remove('collapsed');
+        localStorage.setItem(`${section.id}-collapsed`, 'false');
+      }
+    });
+  });
+
+  // Back-to-top button
+  const btt = document.getElementById('back-to-top');
+  if (btt) {
+    window.addEventListener('scroll', () => { btt.hidden = window.scrollY < 300; }, { passive: true });
+    btt.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  }
 
   initCollapsibleSections();
   loadAll();
