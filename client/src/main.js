@@ -42,6 +42,92 @@ const BOOK_COLORS = {
   betmgm:     '#bc8cff',
 };
 
+// ─── Crosshair plugin (shared across all line/bar charts) ────────────────────
+const crosshairPlugin = {
+  id: 'crosshair',
+  afterDraw(chart) {
+    if (!chart.tooltip._active?.length) return;
+    const { ctx, chartArea: { top, bottom } } = chart;
+    const x = chart.tooltip._active[0].element.x;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(139,148,158,0.25)';
+    ctx.setLineDash([3, 3]);
+    ctx.stroke();
+    ctx.restore();
+  },
+};
+
+// ─── Recent trend computation ─────────────────────────────────────────────────
+function computeRecentTrends(games, n = 5) {
+  const settled = games.filter(g => g.result != null);
+  if (settled.length < n) return null;
+
+  const recent = settled.slice(0, n);
+  const recentWins = recent.filter(g => g.result === 'win').length;
+  const recentWinRate = (recentWins / n) * 100;
+
+  const overallWins = settled.filter(g => g.result === 'win').length;
+  const overallWinRate = (overallWins / settled.length) * 100;
+
+  const getClv = g => g.pin_clv ?? g.dk_clv ?? g.fd_clv;
+  const recentClvs = recent.map(getClv).filter(v => v != null);
+  const allClvs    = settled.map(getClv).filter(v => v != null);
+
+  const recentAvgClv  = recentClvs.length ? recentClvs.reduce((a, b) => a + b, 0) / recentClvs.length : null;
+  const overallAvgClv = allClvs.length    ? allClvs.reduce((a, b) => a + b, 0) / allClvs.length : null;
+
+  return {
+    winRate: recentWinRate - overallWinRate,
+    clv: recentAvgClv != null && overallAvgClv != null ? recentAvgClv - overallAvgClv : null,
+    recentWins,
+  };
+}
+
+// ─── Insight card generator ───────────────────────────────────────────────────
+function generateInsight(stats, displayClv) {
+  const card   = document.getElementById('insight-card');
+  const textEl = document.getElementById('insight-text');
+  if (!card || !textEl) return;
+
+  const totalGames = (stats.wins ?? 0) + (stats.losses ?? 0);
+  if (totalGames < 5) {
+    textEl.textContent = 'Not enough games yet — check back after a few more settled results.';
+    card.hidden = false;
+    return;
+  }
+
+  const winPositive = stats.win_rate_pct != null && stats.win_rate_pct > 52.4;
+  const clvPositive = displayClv != null && displayClv > 0;
+  const roiPositive = stats.roi_pct != null && stats.roi_pct > 0;
+
+  let insight;
+  if (winPositive && clvPositive && roiPositive) {
+    insight = 'Positive CLV and ROI with a winning record — this looks like a sustainable edge.';
+  } else if (winPositive && clvPositive && !roiPositive) {
+    insight = 'Winning with positive CLV, but ROI is slightly negative — sample size may still be catching up.';
+  } else if (winPositive && !clvPositive) {
+    insight = "Winning at a profitable rate, but negative CLV suggests you're running above expectation — variance at play.";
+  } else if (!winPositive && clvPositive) {
+    insight = 'Positive CLV without a winning record yet — the model likes your line selection, stay patient.';
+  } else if (!winPositive && !clvPositive && stats.roi_pct != null && stats.roi_pct < -5) {
+    insight = 'Below break-even win rate with negative CLV — worth reviewing line selection strategy.';
+  } else {
+    insight = 'Results are near break-even. More games needed for a statistically meaningful signal.';
+  }
+
+  if (stats.streak?.count >= 4) {
+    const runType = stats.streak.type === 'win' ? 'win' : 'loss';
+    insight += ` Currently on a ${stats.streak.count}-game ${runType} streak.`;
+  }
+
+  textEl.textContent = insight;
+  card.hidden = false;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtDate(iso) {
@@ -154,6 +240,33 @@ function renderStats(stats, sharpCount, ouData) {
       setText('#stat-ou-sub', `${pct}% overs · ${ouData.games_with_line} games`);
     }
   }
+
+  // Recent trend indicators (last 5 settled games)
+  const trends = computeRecentTrends(allGames);
+  if (trends) {
+    const winTrendEl = document.getElementById('stat-win-rate-trend');
+    if (winTrendEl) {
+      const isUp   = trends.winRate > 3;
+      const isDown = trends.winRate < -3;
+      const arrow  = isUp ? '↑' : isDown ? '↓' : '→';
+      winTrendEl.textContent = `${arrow} ${trends.recentWins}–${5 - trends.recentWins} last 5`;
+      winTrendEl.className   = `stat-trend-sub ${isUp ? 'trend-up' : isDown ? 'trend-down' : 'trend-flat'}`;
+      winTrendEl.hidden = false;
+    }
+    const clvTrendEl = document.getElementById('stat-clv-trend');
+    if (clvTrendEl && trends.clv != null) {
+      const isUp   = trends.clv > 0.5;
+      const isDown = trends.clv < -0.5;
+      const arrow  = isUp ? '↑' : isDown ? '↓' : '→';
+      const sign   = trends.clv > 0 ? '+' : '';
+      clvTrendEl.textContent = `${arrow} ${sign}${trends.clv.toFixed(1)}% vs avg last 5`;
+      clvTrendEl.className   = `stat-trend-sub ${isUp ? 'trend-up' : isDown ? 'trend-down' : 'trend-flat'}`;
+      clvTrendEl.hidden = false;
+    }
+  }
+
+  // Insight card
+  generateInsight(stats, displayClv);
 }
 
 // ─── Dollar tracker stat card ─────────────────────────────────────────────────
@@ -413,6 +526,7 @@ function renderOddsTimeline(snapshots) {
   oddsChart = new Chart(ctx, {
     type: 'line',
     data: { datasets },
+    plugins: [crosshairPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -427,6 +541,7 @@ function renderOddsTimeline(snapshots) {
           borderWidth: 1,
           titleColor: '#8b949e',
           bodyColor: '#e6edf3',
+          padding: 8,
           callbacks: {
             title: (items) => fmtDateTime(items[0].raw.x),
             label: (item) => {
@@ -589,24 +704,38 @@ function renderDollarTracker(data) {
     type: 'line',
     data: {
       labels,
-      datasets: [{
-        label: 'Running P&L ($1/game)',
-        data: values,
-        borderColor: '#388bfd',
-        backgroundColor: 'rgba(56,139,253,0.08)',
-        fill: true,
-        borderWidth: 2,
-        pointRadius: 4,
-        pointHoverRadius: 6,
-        pointBackgroundColor: colors,
-        pointBorderColor: colors,
-        tension: 0,
-        spanGaps: true,
-      }],
+      datasets: [
+        {
+          label: 'Running P&L ($1/game)',
+          data: values,
+          borderColor: '#388bfd',
+          backgroundColor: 'rgba(56,139,253,0.08)',
+          fill: true,
+          borderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 7,
+          pointBackgroundColor: colors,
+          pointBorderColor: colors,
+          tension: 0,
+          spanGaps: true,
+        },
+        {
+          label: 'Break-even',
+          data: Array(labels.length).fill(0),
+          borderColor: 'rgba(139,148,158,0.4)',
+          borderWidth: 1.5,
+          borderDash: [5, 4],
+          pointRadius: 0,
+          fill: false,
+          tension: 0,
+        },
+      ],
     },
+    plugins: [crosshairPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -615,6 +744,8 @@ function renderDollarTracker(data) {
           borderWidth: 1,
           titleColor: '#8b949e',
           bodyColor: '#e6edf3',
+          padding: 8,
+          filter: item => item.dataset.label !== 'Break-even',
           callbacks: {
             label: (item) => {
               const v = item.raw;
@@ -823,6 +954,7 @@ function renderPuckLineTracker(data) {
           fill: false,
           borderWidth: 2,
           pointRadius: 2,
+          pointHoverRadius: 5,
           tension: 0,
         },
         {
@@ -833,6 +965,7 @@ function renderPuckLineTracker(data) {
           fill: false,
           borderWidth: 2,
           pointRadius: 2,
+          pointHoverRadius: 5,
           tension: 0,
         },
         {
@@ -847,9 +980,11 @@ function renderPuckLineTracker(data) {
         },
       ],
     },
+    plugins: [crosshairPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { labels: { color: '#8b949e', boxWidth: 12, font: { size: 11 } } },
         tooltip: {
@@ -858,6 +993,7 @@ function renderPuckLineTracker(data) {
           borderWidth: 1,
           titleColor: '#8b949e',
           bodyColor: '#e6edf3',
+          padding: 8,
         },
       },
       scales: {
@@ -917,9 +1053,11 @@ function renderTotalGoalsChart(bets) {
         },
       ],
     },
+    plugins: [crosshairPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { labels: { color: '#8b949e', boxWidth: 12, font: { size: 11 } } },
         tooltip: {
@@ -928,6 +1066,7 @@ function renderTotalGoalsChart(bets) {
           borderWidth: 1,
           titleColor: '#8b949e',
           bodyColor: '#e6edf3',
+          padding: 8,
           callbacks: {
             label: (item) => item.dataset.type === 'line'
               ? null
@@ -979,29 +1118,43 @@ function renderOUTracker(data) {
 
   // Summary chips
   if (summary) {
-    const overSign  = data.over_pnl  >= 0 ? '+' : '';
-    const underSign = data.under_pnl >= 0 ? '+' : '';
-    const overCls   = data.over_pnl  >= 0 ? 'positive' : 'negative';
-    const underCls  = data.under_pnl >= 0 ? 'positive' : 'negative';
-    const ouTotal = data.overs + data.unders;
-    const ouPct = ouTotal > 0 ? ((data.overs / ouTotal) * 100).toFixed(1) : null;
-    summary.innerHTML = `
-      <div class="pl-chip">
-        <span class="pl-chip-label">Overs</span>
-        <span class="pl-chip-value">${data.overs}W–${data.unders + data.pushes}L${ouPct != null ? ` <span class="pl-chip-pct">${ouPct}%</span>` : ''}</span>
-      </div>
-      <div class="pl-chip">
-        <span class="pl-chip-label">Unders</span>
-        <span class="pl-chip-value">${data.unders}W–${data.overs + data.pushes}L</span>
-      </div>
-      <div class="pl-chip">
-        <span class="pl-chip-label">$1/game Over P&amp;L</span>
-        <span class="pl-chip-value ${overCls}">${overSign}$${Math.abs(data.over_pnl).toFixed(2)}</span>
-      </div>
-      <div class="pl-chip">
-        <span class="pl-chip-label">$1/game Under P&amp;L</span>
-        <span class="pl-chip-value ${underCls}">${underSign}$${Math.abs(data.under_pnl).toFixed(2)}</span>
-      </div>`;
+    if (withLine.length === 0) {
+      summary.innerHTML = `
+        <div class="ou-empty-state">
+          <div class="ou-empty-title">No lines entered yet</div>
+          <div class="ou-empty-sub">Use the + line buttons in the table below to start tracking Over/Under bets.</div>
+        </div>`;
+      // Auto-collapse the section on first view if the user has never interacted with it
+      const ouSection = document.getElementById('sec-ou');
+      if (ouSection && localStorage.getItem('sec-ou-collapsed') === null) {
+        ouSection.classList.add('collapsed');
+        localStorage.setItem('sec-ou-collapsed', 'true');
+      }
+    } else {
+      const overSign  = data.over_pnl  >= 0 ? '+' : '';
+      const underSign = data.under_pnl >= 0 ? '+' : '';
+      const overCls   = data.over_pnl  >= 0 ? 'positive' : 'negative';
+      const underCls  = data.under_pnl >= 0 ? 'positive' : 'negative';
+      const ouTotal = data.overs + data.unders;
+      const ouPct = ouTotal > 0 ? ((data.overs / ouTotal) * 100).toFixed(1) : null;
+      summary.innerHTML = `
+        <div class="pl-chip">
+          <span class="pl-chip-label">Overs</span>
+          <span class="pl-chip-value">${data.overs}W–${data.unders + data.pushes}L${ouPct != null ? ` <span class="pl-chip-pct">${ouPct}%</span>` : ''}</span>
+        </div>
+        <div class="pl-chip">
+          <span class="pl-chip-label">Unders</span>
+          <span class="pl-chip-value">${data.unders}W–${data.overs + data.pushes}L</span>
+        </div>
+        <div class="pl-chip">
+          <span class="pl-chip-label">$1/game Over P&amp;L</span>
+          <span class="pl-chip-value ${overCls}">${overSign}$${Math.abs(data.over_pnl).toFixed(2)}</span>
+        </div>
+        <div class="pl-chip">
+          <span class="pl-chip-label">$1/game Under P&amp;L</span>
+          <span class="pl-chip-value ${underCls}">${underSign}$${Math.abs(data.under_pnl).toFixed(2)}</span>
+        </div>`;
+    }
   }
 
   // Table (newest first)
@@ -1060,6 +1213,7 @@ function renderOUTracker(data) {
           fill: true,
           borderWidth: 2,
           pointRadius: 2,
+          pointHoverRadius: 5,
           tension: 0,
         },
         {
@@ -1070,13 +1224,16 @@ function renderOUTracker(data) {
           fill: true,
           borderWidth: 2,
           pointRadius: 2,
+          pointHoverRadius: 5,
           tension: 0,
         },
       ],
     },
+    plugins: [crosshairPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { labels: { color: '#8b949e', boxWidth: 12, font: { size: 11 } } },
         tooltip: {
@@ -1085,6 +1242,7 @@ function renderOUTracker(data) {
           borderWidth: 1,
           titleColor: '#8b949e',
           bodyColor: '#e6edf3',
+          padding: 8,
           callbacks: {
             label: (item) => {
               const sign = item.raw >= 0 ? '+' : '';
@@ -1248,6 +1406,32 @@ async function loadAll() {
   if (btn) btn.classList.remove('spinning');
 }
 
+// ─── Scroll spy (highlight active section in nav) ────────────────────────────
+
+function initScrollSpy() {
+  const sectionIds = ['sec-games', 'sec-dollar', 'sec-puckline', 'sec-goals', 'sec-ou'];
+  const navLinks = {};
+  sectionIds.forEach(id => {
+    const link = document.querySelector(`.section-nav-link[href="#${id}"]`);
+    if (link) navLinks[id] = link;
+  });
+  if (!Object.keys(navLinks).length) return;
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        Object.values(navLinks).forEach(l => l.classList.remove('active'));
+        if (navLinks[entry.target.id]) navLinks[entry.target.id].classList.add('active');
+      }
+    });
+  }, { rootMargin: '-25% 0px -60% 0px' });
+
+  sectionIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) observer.observe(el);
+  });
+}
+
 // ─── Collapsible sections ─────────────────────────────────────────────────────
 
 function initCollapsibleSections() {
@@ -1407,5 +1591,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   initCollapsibleSections();
+  initScrollSpy();
   loadAll();
 });

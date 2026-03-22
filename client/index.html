@@ -8,7 +8,8 @@
   </head>
   <body>
     <header class="site-header">
-      <div class="header-inner">
+      <!-- Row 1: Product layer -->
+      <div class="header-row header-product">
         <div class="logo">
           <svg class="logo-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M12 2L3 7v10l9 5 9-5V7L12 2z" fill="#154734" stroke="#ddbd5e" stroke-width="1.5"/>
@@ -16,24 +17,28 @@
           </svg>
           <span class="logo-text">Wild Tracker</span>
         </div>
-        <div class="header-meta">
+        <div class="header-season">
           <span class="season-label" id="season-label">Minnesota Wild</span>
           <div class="season-toggle" id="season-toggle" role="group" aria-label="Season type">
             <button class="season-toggle-btn active" data-type="REG">Regular Season</button>
             <button class="season-toggle-btn" data-type="PST">Playoffs</button>
           </div>
-          <div class="admin-tools" title="Admin tools — triggers data writes">
-            <button class="btn-admin" id="btn-settle" title="Fetch final scores for all past games">Settle</button>
-            <button class="btn-admin" id="btn-backfill" title="Fetch historical totals &amp; spreads for past games">Backfill Odds</button>
-            <button class="btn-admin" id="btn-backfill-snaps" title="Backfill open/close moneyline snapshots for past games">Backfill Timeline</button>
-          </div>
-          <button class="btn-refresh" id="btn-refresh" title="Refresh all data">
-            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M1.5 1.5A.5.5 0 0 1 2 1h4a.5.5 0 0 1 0 1H3.5A6.5 6.5 0 1 1 2 8.5a.5.5 0 0 1 1 0 5.5 5.5 0 1 0 1.096-3.3L5.5 6.5A.5.5 0 0 1 5 7H1a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5z"/>
-            </svg>
-            Refresh
-          </button>
         </div>
+      </div>
+      <!-- Row 2: Admin layer -->
+      <div class="header-row header-admin">
+        <span class="admin-row-label">Admin</span>
+        <div class="admin-tools" title="Admin tools — triggers data writes">
+          <button class="btn-admin" id="btn-settle" title="Fetch final scores for all past games">Settle</button>
+          <button class="btn-admin" id="btn-backfill" title="Fetch historical totals &amp; spreads for past games">Backfill Odds</button>
+          <button class="btn-admin" id="btn-backfill-snaps" title="Backfill open/close moneyline snapshots for past games">Backfill Timeline</button>
+        </div>
+        <button class="btn-refresh" id="btn-refresh" title="Refresh all data">
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M1.5 1.5A.5.5 0 0 1 2 1h4a.5.5 0 0 1 0 1H3.5A6.5 6.5 0 1 1 2 8.5a.5.5 0 0 1 1 0 5.5 5.5 0 1 0 1.096-3.3L5.5 6.5A.5.5 0 0 1 5 7H1a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5z"/>
+          </svg>
+          Refresh
+        </button>
       </div>
     </header>
 
@@ -56,16 +61,19 @@
           <span class="stat-value loading">—</span>
           <span class="stat-sub" id="stat-win-record">0W – 0L</span>
           <span class="stat-sub stat-sub-dim">break-even ~52.4%</span>
+          <span class="stat-trend-sub" id="stat-win-rate-trend" hidden></span>
         </div>
         <div class="stat-card" id="stat-clv">
           <span class="stat-label">Avg CLV</span>
           <span class="stat-value loading">—</span>
           <span class="stat-sub">vs Pinnacle close</span>
+          <span class="stat-trend-sub" id="stat-clv-trend" hidden></span>
         </div>
         <div class="stat-card" id="stat-roi">
           <span class="stat-label">ROI</span>
           <span class="stat-value loading">—</span>
           <span class="stat-sub">per unit staked</span>
+          <span class="stat-trend-sub" id="stat-roi-trend" hidden></span>
         </div>
         <div class="stat-card" id="stat-dollar-pnl">
           <span class="stat-label">$1/game P&amp;L</span>
@@ -88,6 +96,12 @@
           <span class="stat-sub" id="stat-ou-sub">overs vs unders</span>
         </div>
       </section>
+
+      <!-- ─── Insight Card ─────────────────────────────────────────────── -->
+      <div class="insight-card" id="insight-card" hidden>
+        <span class="insight-label">Insight</span>
+        <p class="insight-text" id="insight-text">—</p>
+      </div>
 
       <!-- ─── Splits Bar ─────────────────────────────────────────────────── -->
       <section class="splits-bar" id="splits-bar" aria-label="Record splits">
